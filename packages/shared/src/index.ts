@@ -10,7 +10,8 @@ export const studentIdStrictSchema = z
   .regex(/^[A-Za-z0-9]+$/);
 export const activationCodeSchema = z.string().trim().toUpperCase().regex(/^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{6}$/);
 export const userRoleSchema = z.enum(["voter", "aspirant_rep", "ec_admin"]);
-export const captchaTokenSchema = z.string().trim().min(1);
+// TODO: Re-enable mandatory captcha_token validation when hCaptcha is turned back on.
+export const captchaTokenSchema = z.string().trim().min(1).optional();
 
 export const activationPasswordSchema = z
   .string()

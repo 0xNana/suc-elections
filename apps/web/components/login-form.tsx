@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { BackendError, loginStudent } from "../lib/api";
-import { HCaptchaWidget } from "./hcaptcha-widget";
 import { getSupabaseBrowserClient } from "../lib/supabase-browser";
 import { SiteFrame } from "./site-frame";
 
@@ -24,8 +23,6 @@ function getRoleDestination(role?: string) {
 export function LoginForm() {
   const [studentId, setStudentId] = useState("");
   const [password, setPassword] = useState("");
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const [captchaResetSignal, setCaptchaResetSignal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
@@ -33,15 +30,11 @@ export function LoginForm() {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!captchaToken) {
-      setError("Complete the verification check to continue.");
-      return;
-    }
     setSubmitting(true);
     setError(null);
 
     try {
-      const session = await loginStudent(studentId, password, captchaToken);
+      const session = await loginStudent(studentId, password);
       const supabase = getSupabaseBrowserClient();
       const { error: sessionError } = await supabase.auth.setSession({
         access_token: session.access_token,
@@ -57,7 +50,6 @@ export function LoginForm() {
       setError(cause instanceof BackendError ? cause.message : "Unable to sign in");
     } finally {
       setSubmitting(false);
-      setCaptchaResetSignal((value) => value + 1);
     }
   }
 
@@ -111,11 +103,7 @@ export function LoginForm() {
               </div>
             ) : null}
 
-            <HCaptchaWidget
-              token={captchaToken}
-              onTokenChange={setCaptchaToken}
-              resetSignal={captchaResetSignal}
-            />
+            {/* TODO: Restore hCaptcha here before re-enabling bot protection. */}
 
             <div className="flex flex-wrap gap-3">
               <button className="button-primary" type="submit" disabled={submitting}>

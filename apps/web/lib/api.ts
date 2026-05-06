@@ -70,13 +70,12 @@ export async function backendRequest<T>(
   return parseResponse<T>(response);
 }
 
-export function loginStudent(studentId: string, password: string, captchaToken: string) {
+export function loginStudent(studentId: string, password: string) {
   return backendRequest<SessionResponse>("/auth/login", {
     method: "POST",
     body: {
       student_id: studentId,
-      password,
-      captcha_token: captchaToken
+      password
     }
   });
 }
@@ -84,16 +83,14 @@ export function loginStudent(studentId: string, password: string, captchaToken: 
 export function activateStudentAccount(
   studentId: string,
   activationCode: string,
-  newPassword: string,
-  captchaToken: string
+  newPassword: string
 ) {
   return backendRequest<SessionResponse>("/auth/activate", {
     method: "POST",
     body: {
       student_id: studentId,
       activation_code: activationCode,
-      new_password: newPassword,
-      captcha_token: captchaToken
+      new_password: newPassword
     }
   });
 }

@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 
+// TODO: Re-enable this widget in the auth flows when bot protection is turned back on.
+
 declare global {
   interface Window {
     hcaptcha?: {

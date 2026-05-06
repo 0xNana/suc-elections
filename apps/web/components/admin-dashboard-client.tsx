@@ -22,7 +22,6 @@ import {
   saveEcConfig
 } from "../lib/api";
 import { getSupabaseBrowserClient } from "../lib/supabase-browser";
-import { HCaptchaWidget } from "./hcaptcha-widget";
 import { SiteFrame } from "./site-frame";
 
 type LiveStatus = "connecting" | "live" | "offline";
@@ -343,23 +342,17 @@ function PositionCard({
 function AdminLoginGate({
   studentId,
   password,
-  captchaToken,
-  captchaResetSignal,
   error,
   loading,
   onStudentIdChange,
-  onCaptchaTokenChange,
   onPasswordChange,
   onSubmit
 }: {
   studentId: string;
   password: string;
-  captchaToken: string | null;
-  captchaResetSignal: number;
   error: string | null;
   loading: boolean;
   onStudentIdChange: (value: string) => void;
-  onCaptchaTokenChange: (value: string | null) => void;
   onPasswordChange: (value: string) => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 }) {
@@ -415,11 +408,7 @@ function AdminLoginGate({
             </div>
           ) : null}
 
-          <HCaptchaWidget
-            token={captchaToken}
-            onTokenChange={onCaptchaTokenChange}
-            resetSignal={captchaResetSignal}
-          />
+          {/* TODO: Restore hCaptcha here before re-enabling bot protection. */}
 
           <button className="button-primary w-full" type="submit" disabled={loading}>
             {loading ? "Signing in..." : "Open admin"}
@@ -433,8 +422,6 @@ function AdminLoginGate({
 export function AdminDashboardClient() {
   const [studentId, setStudentId] = useState("");
   const [password, setPassword] = useState("");
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const [captchaResetSignal, setCaptchaResetSignal] = useState(0);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<AdminTab>("issue-codes");
   const [config, setConfig] = useState<EcConfigResponse | null>(null);
@@ -592,15 +579,11 @@ export function AdminDashboardClient() {
 
   async function handleLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!captchaToken) {
-      setError("Complete the verification check to continue.");
-      return;
-    }
     setLoading(true);
     setError(null);
 
     try {
-      const session = await loginStudent(studentId, password, captchaToken);
+      const session = await loginStudent(studentId, password);
       if (session.role !== "ec_admin") {
         setError("This account does not have Electoral Commission access.");
         setLoading(false);
@@ -627,7 +610,6 @@ export function AdminDashboardClient() {
       setError(cause instanceof BackendError ? cause.message : "Unable to sign in");
     } finally {
       setLoading(false);
-      setCaptchaResetSignal((value) => value + 1);
     }
   }
 
@@ -886,12 +868,9 @@ export function AdminDashboardClient() {
         <AdminLoginGate
           studentId={studentId}
           password={password}
-          captchaToken={captchaToken}
-          captchaResetSignal={captchaResetSignal}
           error={error}
           loading={loading}
           onStudentIdChange={setStudentId}
-          onCaptchaTokenChange={setCaptchaToken}
           onPasswordChange={setPassword}
           onSubmit={handleLogin}
         />

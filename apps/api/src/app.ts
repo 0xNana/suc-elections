@@ -38,12 +38,11 @@ import type { AuthProvider, StudentRole } from "./services/auth-provider.js";
 import type { ElectionStore } from "./services/election-store.js";
 import type { ResultsBroadcaster } from "./services/results-broadcaster.js";
 import type { SessionVerifier } from "./services/session-verifier.js";
-import { verifyHCaptchaToken } from "./utils/hcaptcha.js";
 
 interface AppDependencies {
   authProvider: AuthProvider;
   broadcaster: ResultsBroadcaster;
-  corsOrigin: string;
+  corsOrigins: string[];
   hcaptchaSecret: string;
   hcaptchaSiteKey: string;
   sessionVerifier: SessionVerifier;
@@ -214,6 +213,27 @@ function serializeResultVerifications(
 export function createApp(dependencies: AppDependencies) {
   const app = express();
   app.set("trust proxy", 1);
+  const allowedOrigins = dependencies.corsOrigins.map((origin) => origin.replace(/\/+$/, ""));
+  const corsOptions: cors.CorsOptions = {
+    origin(origin, callback) {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      const normalizedOrigin = origin.replace(/\/+$/, "");
+      if (allowedOrigins.includes(normalizedOrigin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new ApiError(403, `Origin ${origin} is not allowed by CORS`));
+    },
+    credentials: false,
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    optionsSuccessStatus: 204
+  };
 
   app.use(
     helmet({
@@ -240,14 +260,8 @@ export function createApp(dependencies: AppDependencies) {
     response.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
     next();
   });
-  app.use(
-    cors({
-      origin: dependencies.corsOrigin,
-      credentials: false,
-      methods: ["GET", "POST"],
-      allowedHeaders: ["Content-Type", "Authorization"]
-    })
-  );
+  app.use(cors(corsOptions));
+  app.options("*", cors(corsOptions));
   app.use(express.json({ limit: "32kb" }));
 
   const loginLimiter = rateLimit({
@@ -400,13 +414,7 @@ export function createApp(dependencies: AppDependencies) {
         throw new ApiError(400, "Invalid activation payload");
       }
 
-      const [verified] = await verifyHCaptchaToken(parsed.data.captcha_token, getClientIp(request), {
-        secret: dependencies.hcaptchaSecret,
-        siteKey: dependencies.hcaptchaSiteKey
-      });
-      if (!verified) {
-        throw new ApiError(403, "Verification check failed. Please try again.");
-      }
+      // TODO: Re-enable hCaptcha verification for activation before production hardening.
 
       const student = await dependencies.store.findStudentByStudentId(parsed.data.student_id);
       if (
@@ -484,13 +492,7 @@ export function createApp(dependencies: AppDependencies) {
         throw new ApiError(400, "Invalid login payload");
       }
 
-      const [verified] = await verifyHCaptchaToken(parsed.data.captcha_token, getClientIp(request), {
-        secret: dependencies.hcaptchaSecret,
-        siteKey: dependencies.hcaptchaSiteKey
-      });
-      if (!verified) {
-        throw new ApiError(403, "Verification check failed. Please try again.");
-      }
+      // TODO: Re-enable hCaptcha verification for login before production hardening.
 
       const student = await dependencies.store.findStudentByStudentId(parsed.data.student_id);
       if (!student) {

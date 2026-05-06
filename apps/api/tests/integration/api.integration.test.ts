@@ -296,7 +296,7 @@ describe.sequential("SUC-VOTE activation flow integration", () => {
     app = createApp({
       authProvider: new FakeAuthProvider(harness.pool, jwtSecret),
       broadcaster: new NoopResultsBroadcaster(),
-      corsOrigin: "http://localhost:3000",
+      corsOrigins: ["http://localhost:3000"],
       hcaptchaSecret: "test-secret",
       hcaptchaSiteKey: "test-site-key",
       sessionVerifier: new JwtSessionVerifier(jwtSecret),

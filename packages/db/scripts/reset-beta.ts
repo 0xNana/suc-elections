@@ -47,7 +47,7 @@ async function main() {
 
     await pg.query("begin");
     await pg.query(
-      "truncate table public.result_verifications, public.votes, public.audit_log, public.candidates, public.positions, public.election_config, public.students restart identity cascade"
+      "truncate table public.result_verifications, public.votes, public.audit_log, public.election_config, public.students restart identity cascade"
     );
     await pg.query("commit");
 
@@ -75,11 +75,10 @@ async function main() {
             "public.result_verifications",
             "public.votes",
             "public.audit_log",
-            "public.candidates",
-            "public.positions",
             "public.election_config",
             "public.students"
           ],
+          preserved_tables: ["public.positions", "public.candidates"],
           deleted_auth_users: deletedAuthUsers,
           failed_auth_deletes: failedAuthDeletes
         },

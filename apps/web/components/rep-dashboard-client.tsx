@@ -7,7 +7,6 @@ import type { AuditResponse, RepResultsResponse } from "@suc-vote/shared";
 
 import { BackendError, getAudit, getRepResults, loginStudent, logoutCurrentUser, verifyRepResults } from "../lib/api";
 import { getSupabaseBrowserClient } from "../lib/supabase-browser";
-import { HCaptchaWidget } from "./hcaptcha-widget";
 import { SiteFrame } from "./site-frame";
 
 type LiveStatus = "connecting" | "live" | "offline";
@@ -192,23 +191,17 @@ function PositionCard({
 function RepLoginGate({
   studentId,
   password,
-  captchaToken,
-  captchaResetSignal,
   error,
   loading,
   onStudentIdChange,
-  onCaptchaTokenChange,
   onPasswordChange,
   onSubmit
 }: {
   studentId: string;
   password: string;
-  captchaToken: string | null;
-  captchaResetSignal: number;
   error: string | null;
   loading: boolean;
   onStudentIdChange: (value: string) => void;
-  onCaptchaTokenChange: (value: string | null) => void;
   onPasswordChange: (value: string) => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 }) {
@@ -264,11 +257,7 @@ function RepLoginGate({
             </div>
           ) : null}
 
-          <HCaptchaWidget
-            token={captchaToken}
-            onTokenChange={onCaptchaTokenChange}
-            resetSignal={captchaResetSignal}
-          />
+          {/* TODO: Restore hCaptcha here before re-enabling bot protection. */}
 
           <button className="button-primary w-full" type="submit" disabled={loading}>
             {loading ? "Signing in..." : "Open dashboard"}
@@ -282,8 +271,6 @@ function RepLoginGate({
 export function RepDashboardClient() {
   const [studentId, setStudentId] = useState("");
   const [password, setPassword] = useState("");
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const [captchaResetSignal, setCaptchaResetSignal] = useState(0);
   const [searchInput, setSearchInput] = useState("");
   const [activeSearch, setActiveSearch] = useState("");
   const [accessToken, setAccessToken] = useState<string | null>(null);
@@ -398,15 +385,11 @@ export function RepDashboardClient() {
 
   async function handleRepLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!captchaToken) {
-      setError("Complete the verification check to continue.");
-      return;
-    }
     setLoading(true);
     setError(null);
 
     try {
-      const session = await loginStudent(studentId, password, captchaToken);
+      const session = await loginStudent(studentId, password);
       if (session.role !== "aspirant_rep") {
         setError("This account does not have Aspirant Rep access.");
         setLoading(false);
@@ -429,7 +412,6 @@ export function RepDashboardClient() {
       setError(cause instanceof BackendError ? cause.message : "Unable to sign in");
     } finally {
       setLoading(false);
-      setCaptchaResetSignal((value) => value + 1);
     }
   }
 
@@ -515,12 +497,9 @@ export function RepDashboardClient() {
         <RepLoginGate
           studentId={studentId}
           password={password}
-          captchaToken={captchaToken}
-          captchaResetSignal={captchaResetSignal}
           error={error}
           loading={loading}
           onStudentIdChange={setStudentId}
-          onCaptchaTokenChange={setCaptchaToken}
           onPasswordChange={setPassword}
           onSubmit={handleRepLogin}
         />

@@ -5,7 +5,7 @@ export interface ApiEnv {
   supabaseAnonKey: string;
   supabaseServiceRoleKey: string;
   jwtSecret: string | undefined;
-  corsOrigin: string;
+  corsOrigins: string[];
   hcaptchaSecret: string;
   hcaptchaSiteKey: string;
 }
@@ -17,6 +17,14 @@ function readRequired(...names: string[]) {
   }
 
   return value;
+}
+
+function parseCorsOrigins(value: string | undefined) {
+  const source = value ?? "http://localhost:3000";
+  return source
+    .split(",")
+    .map((origin) => origin.trim().replace(/\/+$/, ""))
+    .filter(Boolean);
 }
 
 export function loadEnv(): ApiEnv {
@@ -35,7 +43,7 @@ export function loadEnv(): ApiEnv {
       "SUPABASE_SECRET_KEY"
     ),
     jwtSecret: process.env.JWT_SECRET,
-    corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:3000",
+    corsOrigins: parseCorsOrigins(process.env.CORS_ORIGIN),
     hcaptchaSecret: process.env.HCAPTCHA_SECRET ?? "ES_7d4c434b3ebb4c19b838301e49db888d",
     hcaptchaSiteKey:
       process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY ??

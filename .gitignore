@@ -13,6 +13,7 @@ coverage
 .env.*.local
 npm-debug.log*
 pnpm-debug.log*
+*.swp
 
 # private operational / local-only docs
 docs/OPS_GUIDE.md

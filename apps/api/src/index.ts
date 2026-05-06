@@ -32,7 +32,7 @@ const app = createApp({
     process.env.NODE_ENV === "test"
       ? new NoopResultsBroadcaster()
       : new SupabaseResultsBroadcaster(env.supabaseUrl, env.supabaseServiceRoleKey),
-  corsOrigin: env.corsOrigin,
+  corsOrigins: env.corsOrigins,
   hcaptchaSecret: env.hcaptchaSecret,
   hcaptchaSiteKey: env.hcaptchaSiteKey,
   sessionVerifier: env.jwtSecret

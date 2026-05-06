@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { activateStudentAccount, BackendError } from "../lib/api";
-import { HCaptchaWidget } from "./hcaptcha-widget";
 import { getSupabaseBrowserClient } from "../lib/supabase-browser";
 import { SiteFrame } from "./site-frame";
 
@@ -39,8 +38,6 @@ export function ActivateForm() {
   const [activationCode, setActivationCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const [captchaResetSignal, setCaptchaResetSignal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
@@ -54,16 +51,12 @@ export function ActivateForm() {
       setError("Passwords do not match.");
       return;
     }
-    if (!captchaToken) {
-      setError("Complete the verification check to continue.");
-      return;
-    }
 
     setSubmitting(true);
     setError(null);
 
     try {
-      const session = await activateStudentAccount(studentId, activationCode, newPassword, captchaToken);
+      const session = await activateStudentAccount(studentId, activationCode, newPassword);
       const supabase = getSupabaseBrowserClient();
       const { error: sessionError } = await supabase.auth.setSession({
         access_token: session.access_token,
@@ -79,7 +72,6 @@ export function ActivateForm() {
       setError(cause instanceof BackendError ? cause.message : "Unable to activate account");
     } finally {
       setSubmitting(false);
-      setCaptchaResetSignal((value) => value + 1);
     }
   }
 
@@ -163,11 +155,7 @@ export function ActivateForm() {
               </div>
             ) : null}
 
-            <HCaptchaWidget
-              token={captchaToken}
-              onTokenChange={setCaptchaToken}
-              resetSignal={captchaResetSignal}
-            />
+            {/* TODO: Restore hCaptcha here before re-enabling bot protection. */}
 
             <div className="flex flex-wrap gap-3">
               <button className="button-primary" type="submit" disabled={submitting}>
