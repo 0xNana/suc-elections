@@ -1,0 +1,11 @@
+full_name,student_id,programme,level,role,can_vote
+Abena Serwaa Mensah,CSM20252340,Computer Science,100,voter,true
+Daniel Chukwudi Okafor,MKT20253411,Marketing,300,voter,true
+Mariam Aissatou Diallo,BFN20251287,Banking and Finance,200,voter,true
+Kwesi Boadi Asante,ACC20254502,Accounting,400,aspirant_rep,true
+Ruth Eniola Adebayo,PCC20252119,Pastoral Care and Counselling,300,aspirant_rep,false
+Kelvin Tawanda Moyo,HRM20251864,Human Resource Management,200,voter,true
+Grace Naa Dedei Lartey,THY20250977,Theology,100,voter,true
+Samuel Junior Kamara,MSN20253105,Missiology,400,voter,true
+Favour Imaobong Udo,BUS20252716,Business,100,voter,true
+Esther Wanjiku Njoroge,CSM20254008,Computer Science,200,voter,true

@@ -1,0 +1,21 @@
+{
+  "name": "suc-vote",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "audit": "pnpm audit --audit-level=moderate",
+    "build": "pnpm -r build",
+    "dev": "pnpm --parallel --filter @suc-vote/api --filter @suc-vote/web dev",
+    "dev:api": "pnpm --filter @suc-vote/api dev",
+    "dev:web": "pnpm --filter @suc-vote/web dev",
+    "db:migrate": "pnpm --filter @suc-vote/db migrate",
+    "db:reset-beta": "pnpm --filter @suc-vote/db reset-beta",
+    "test": "pnpm --filter @suc-vote/api test",
+    "typecheck": "pnpm -r typecheck",
+    "db:seed": "pnpm --filter @suc-vote/db seed"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.17",
+    "typescript": "^5.8.3"
+  }
+}

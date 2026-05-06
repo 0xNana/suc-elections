@@ -1,0 +1,26 @@
+node_modules
+**/node_modules
+.next
+**/.next
+dist
+coverage
+.turbo
+.pnpm-store
+*.tsbuildinfo
+**/*.tsbuildinfo
+.env
+.env.local
+.env.*.local
+npm-debug.log*
+pnpm-debug.log*
+
+# private operational / local-only docs
+docs/OPS_GUIDE.md
+CODEX.md
+
+# imported academic source files
+docs/*.xlsx
+docs/*.xls
+docs/*.xml
+docs/*.xlm
+docs/*TIMETABLE*

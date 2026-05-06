@@ -1,0 +1,32 @@
+{
+  "name": "@suc-vote/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "migrate": "tsx scripts/apply-migrations.ts",
+    "reset-beta": "tsx scripts/reset-beta.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "seed": "tsx scripts/seed-demo.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.8",
+    "dotenv": "^16.5.0",
+    "pg": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.17",
+    "@types/pg": "^8.15.2",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
