@@ -34,6 +34,10 @@ interface ScheduleFormState {
   is_locked: boolean;
 }
 
+function isEmptyElectionConfigError(cause: unknown) {
+  return cause instanceof BackendError && cause.status === 503 && cause.message === "Election configuration is unavailable";
+}
+
 function formatNumber(value?: number) {
   if (value === undefined) {
     return "--";
@@ -465,18 +469,30 @@ export function AdminDashboardClient() {
     setError(null);
 
     try {
-      const nextConfig = await getEcConfig(token);
+      let nextConfig: EcConfigResponse | null = null;
+      try {
+        nextConfig = await getEcConfig(token);
+      } catch (cause) {
+        if (!isEmptyElectionConfigError(cause)) {
+          throw cause;
+        }
+      }
       let nextResults: EcResultsResponse | null = null;
       let nextResultsNotice: string | null = null;
 
-      try {
-        nextResults = await getEcResults(token);
-      } catch (cause) {
-        if (cause instanceof BackendError && cause.status === 403) {
-          nextResultsNotice = cause.message;
-        } else {
-          throw cause;
+      if (nextConfig) {
+        try {
+          nextResults = await getEcResults(token);
+        } catch (cause) {
+          if (cause instanceof BackendError && cause.status === 403) {
+            nextResultsNotice = cause.message;
+          } else if (!isEmptyElectionConfigError(cause)) {
+            throw cause;
+          }
         }
+      } else {
+        nextResults = null;
+        nextResultsNotice = null;
       }
 
       startTransition(() => {
@@ -484,11 +500,19 @@ export function AdminDashboardClient() {
         setResults(nextResults);
         setResultsNotice(nextResultsNotice);
         if (options?.syncForm !== false) {
-          setScheduleForm({
-            poll_opens: toDateTimeLocalValue(nextConfig.election.poll_opens),
-            poll_closes: toDateTimeLocalValue(nextConfig.election.poll_closes),
-            is_locked: nextConfig.election.is_locked
-          });
+          if (nextConfig) {
+            setScheduleForm({
+              poll_opens: toDateTimeLocalValue(nextConfig.election.poll_opens),
+              poll_closes: toDateTimeLocalValue(nextConfig.election.poll_closes),
+              is_locked: nextConfig.election.is_locked
+            });
+          } else {
+            setScheduleForm({
+              poll_opens: "",
+              poll_closes: "",
+              is_locked: false
+            });
+          }
         }
       });
     } catch (cause) {

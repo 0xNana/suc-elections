@@ -12,6 +12,10 @@ interface ElectionWindow {
   poll_closes: string;
 }
 
+function isEmptyElectionConfigError(cause: unknown) {
+  return cause instanceof BackendError && cause.status === 503 && cause.message === "Election configuration is unavailable";
+}
+
 export function ResultsClient() {
   const [response, setResponse] = useState<ResultsResponse | null>(null);
   const [closeWindow, setCloseWindow] = useState<ElectionWindow | null>(null);
@@ -26,6 +30,11 @@ export function ResultsClient() {
     } catch (cause) {
       if (cause instanceof BackendError && cause.status === 403) {
         setSealedMessage(cause.message);
+        return;
+      }
+
+      if (isEmptyElectionConfigError(cause)) {
+        setSealedMessage(null);
         return;
       }
 

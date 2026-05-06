@@ -11,6 +11,10 @@ import { SiteFrame } from "./site-frame";
 
 type LiveStatus = "connecting" | "live" | "offline";
 
+function isEmptyElectionConfigError(cause: unknown) {
+  return cause instanceof BackendError && cause.status === 503 && cause.message === "Election configuration is unavailable";
+}
+
 function downloadCsv(audit: AuditResponse) {
   const headers = ["id", "event_type", "actor_token", "ip_address", "payload_hash", "logged_at"];
   const lines = [headers.join(",")];
@@ -311,6 +315,8 @@ export function RepDashboardClient() {
       } catch (cause) {
         if (cause instanceof BackendError && cause.status === 403) {
           nextResultsNotice = cause.message;
+        } else if (isEmptyElectionConfigError(cause)) {
+          nextResultsNotice = null;
         } else {
           throw cause;
         }
