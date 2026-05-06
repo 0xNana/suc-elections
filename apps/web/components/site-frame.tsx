@@ -54,10 +54,27 @@ export function SiteFrame({
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#d6b067]">
               From Africa, A New Light. {eyebrow}
             </p>
-            <p className="text-[#e6dccb]">© 2026 Mr. Ace.</p>
-            <p>
-              Built by <span className="font-semibold text-[#f8f2e9]">Mr. Ace</span>
-            </p>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[#e6dccb]">
+              <span>Built by Mr. Ace</span>
+              <span className="text-[#a8c0d9]">·</span>
+              <span>Open source under MIT</span>
+              <span className="text-[#a8c0d9]">·</span>
+              <a
+                href="https://github.com/0xNana/suc-elections"
+                target="_blank"
+                rel="noreferrer"
+                aria-label="View the SUC Elections repository on GitHub"
+                className="inline-flex items-center justify-center rounded-full border border-[#c7a25c]/35 bg-[rgba(255,255,255,0.04)] p-3 text-[#f8f2e9] transition hover:border-[#d6b067] hover:text-[#d6b067]"
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  className="h-5 w-5 fill-current"
+                >
+                  <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.38 7.86 10.9.58.11.79-.25.79-.56 0-.28-.01-1.2-.02-2.17-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.71.08-.71 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.97.1-.75.4-1.26.72-1.55-2.56-.29-5.26-1.28-5.26-5.72 0-1.26.45-2.29 1.18-3.09-.12-.29-.51-1.47.11-3.06 0 0 .97-.31 3.19 1.18a10.9 10.9 0 0 1 5.81 0c2.22-1.5 3.19-1.18 3.19-1.18.62 1.59.23 2.77.11 3.06.74.8 1.18 1.83 1.18 3.09 0 4.45-2.7 5.43-5.28 5.71.41.36.78 1.05.78 2.12 0 1.53-.01 2.76-.01 3.14 0 .31.21.68.8.56A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z" />
+                </svg>
+              </a>
+            </div>
           </div>
           <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:gap-5">
             <a
