@@ -54,7 +54,7 @@ export function SiteFrame({
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#d6b067]">
               From Africa, A New Light. {eyebrow}
             </p>
-            <p className="text-[#e6dccb]">© 2026 SouthShore University College. Released as open-source software.</p>
+            <p className="text-[#e6dccb]">© 2026 Mr. Ace.</p>
             <p>
               Built by <span className="font-semibold text-[#f8f2e9]">Mr. Ace</span>
             </p>

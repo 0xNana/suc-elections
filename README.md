@@ -167,4 +167,5 @@ See:
 
 ## License
 
-This repository uses the MIT license with SouthShore University College as the copyright holder.
+This repository uses the MIT license with Mr. Ace as copyright holder
+(`Office of the Presidential Aspirant Henry Kwaku Annorh`, https://henrykannorh.org).

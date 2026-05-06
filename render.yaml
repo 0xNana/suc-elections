@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: suc-vote-api
+    runtime: node
+    rootDir: .
+    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @suc-vote/api build
+    startCommand: pnpm --filter @suc-vote/api exec node dist/src/index.js
+    healthCheckPath: /health
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - apps/api/**
+        - packages/shared/**
+        - package.json
+        - pnpm-lock.yaml
+        - pnpm-workspace.yaml
+        - tsconfig.base.json
+      ignoredPaths:
+        - apps/web/**
+        - docs/**
+    envVars:
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: HCAPTCHA_SECRET
+        sync: false
+      - key: HCAPTCHA_SITE_KEY
+        sync: false
