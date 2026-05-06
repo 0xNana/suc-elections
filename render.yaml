@@ -4,7 +4,7 @@ services:
     runtime: node
     rootDir: .
     buildCommand: pnpm install --frozen-lockfile && pnpm --filter @suc-vote/api build
-    startCommand: pnpm --filter @suc-vote/api exec node dist/src/index.js
+    startCommand: pnpm --filter @suc-vote/api exec node dist/apps/api/src/index.js
     healthCheckPath: /health
     autoDeploy: true
     buildFilter:
