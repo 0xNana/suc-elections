@@ -69,19 +69,6 @@ function getBearerToken(request: Request) {
   return header.replace("Bearer ", "").trim();
 }
 
-function shuffle<T>(items: readonly T[]) {
-  const copy = [...items];
-
-  for (let index = copy.length - 1; index > 0; index -= 1) {
-    const target = Math.floor(Math.random() * (index + 1));
-    const current = copy[index]!;
-    copy[index] = copy[target]!;
-    copy[target] = current;
-  }
-
-  return copy;
-}
-
 function requireAuth(sessionVerifier: SessionVerifier) {
   return (request: AuthenticatedRequest, _response: Response, next: NextFunction) => {
     const header = request.header("authorization");
@@ -830,10 +817,7 @@ export function createApp(dependencies: AppDependencies) {
           can_vote: student.can_vote
         },
         voted_positions: votedPositionIds,
-        positions: [...positionMap.values()].map((position) => ({
-          ...position,
-          candidates: shuffle(position.candidates)
-        }))
+        positions: [...positionMap.values()]
       };
 
       response.json(ballotResponseSchema.parse(payload));

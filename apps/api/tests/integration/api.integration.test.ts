@@ -634,6 +634,28 @@ describe.sequential("SUC-VOTE activation flow integration", () => {
     expect(repToken).toBeTruthy();
   });
 
+  it("returns ballot positions and candidates in fixed database order", async () => {
+    const login = await loginStudent();
+    expect(login.status).toBe(200);
+    const token = login.body.access_token as string;
+
+    const response = await request(app)
+      .get("/ballot")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.positions.map((position: { title: string }) => position.title)).toEqual([
+      "President",
+      "General Secretary"
+    ]);
+    expect(
+      response.body.positions[0]?.candidates.map((candidate: { ballot_num: number }) => candidate.ballot_num)
+    ).toEqual([1, 2]);
+    expect(
+      response.body.positions[1]?.candidates.map((candidate: { ballot_num: number }) => candidate.ballot_num)
+    ).toEqual([3]);
+  });
+
   it("returns no rows when an authenticated voter selects directly from votes", async () => {
     await harness.pool.query(
       `insert into public.votes (position_id, candidate_id, voter_token)
