@@ -15,7 +15,7 @@ export const captchaTokenSchema = z.string().trim().min(1).optional();
 
 export const activationPasswordSchema = z
   .string()
-  .min(8)
+  .min(8, "Password must be at least 8 characters long")
   .max(128)
   .regex(/[A-Za-z]/, "Password must contain at least one letter")
   .regex(/[0-9]/, "Password must contain at least one number");
@@ -84,6 +84,8 @@ export const changeRoleResponseSchema = z.object({
 });
 
 export const adminStudentsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
   search: z.string().trim().max(100).optional(),
   role: userRoleSchema.optional(),
   activation_status: z.enum(["all", "activated", "pending"]).default("all")
@@ -100,7 +102,10 @@ export const adminStudentRowSchema = z.object({
 });
 
 export const adminStudentsResponseSchema = z.object({
-  students: z.array(adminStudentRowSchema)
+  students: z.array(adminStudentRowSchema),
+  page: z.number().int().min(1),
+  pageSize: z.number().int().min(1),
+  total: z.number().int().nonnegative()
 });
 
 export const voteRequestSchema = z.object({
@@ -111,7 +116,8 @@ export const voteRequestSchema = z.object({
 export const auditQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
-  search: z.string().trim().max(100).optional()
+  search: z.string().trim().max(100).optional(),
+  event_type: z.string().trim().max(100).optional()
 });
 
 export const electionWindowSchema = z.object({
@@ -210,6 +216,25 @@ export const repResultsResponseSchema = z.object({
   refreshed_at: z.string().datetime()
 });
 
+export const repRegisterRowSchema = z.object({
+  student_id: z.string(),
+  full_name: z.string(),
+  can_vote: z.boolean()
+});
+
+export const repRegisterQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20)
+});
+
+export const repRegisterResponseSchema = z.object({
+  rows: z.array(repRegisterRowSchema),
+  page: z.number().int().min(1),
+  pageSize: z.number().int().min(1),
+  total: z.number().int().nonnegative(),
+  refreshed_at: z.string().datetime()
+});
+
 export const ecConfigUpdateSchema = z
   .object({
     poll_opens: z.string().datetime(),
@@ -221,8 +246,26 @@ export const ecConfigUpdateSchema = z
     path: ["poll_closes"]
   });
 
+export const ecPollExtendSchema = z.object({
+  minutes: z
+    .number()
+    .int()
+    .min(5, "Extension must be at least 5 minutes.")
+    .max(7 * 24 * 60, "Extension cannot be more than 7 days.")
+});
+
+export const ecSetupSummarySchema = z.object({
+  positions_count: z.number().int().nonnegative(),
+  candidates_count: z.number().int().nonnegative(),
+  eligible_voters: z.number().int().nonnegative(),
+  activated_users: z.number().int().nonnegative(),
+  votes_cast: z.number().int().nonnegative(),
+  is_ready_for_polling: z.boolean()
+});
+
 export const ecConfigResponseSchema = z.object({
-  election: electionWindowSchema,
+  election: electionWindowSchema.nullable(),
+  setup: ecSetupSummarySchema,
   refreshed_at: z.string().datetime()
 });
 
@@ -264,7 +307,7 @@ export const ecCountResponseSchema = z.object({
 });
 
 export const repVerifyRequestSchema = z.object({
-  message: z.string().trim().min(5).max(500)
+  remarks: z.string().trim().max(500).optional()
 });
 
 export const repVerifyResponseSchema = z.object({
@@ -280,14 +323,18 @@ export const auditEntrySchema = z.object({
   id: z.number().int().nonnegative(),
   event_type: z.string(),
   actor_token: z.string().nullable(),
+  actor_role: userRoleSchema.nullable(),
   ip_address: z.string().nullable(),
   payload_hash: z.string().nullable(),
   metadata: z.record(z.any()).nullable(),
   logged_at: z.string().datetime()
 });
 
+export const auditEventCountsSchema = z.record(z.number().int().nonnegative());
+
 export const auditResponseSchema = z.object({
   entries: z.array(auditEntrySchema),
+  event_counts: auditEventCountsSchema,
   page: z.number().int().min(1),
   pageSize: z.number().int().min(1),
   total: z.number().int().nonnegative(),
@@ -316,6 +363,8 @@ export type VoteConfirmation = z.infer<typeof voteConfirmationSchema>;
 export type ResultsRow = z.infer<typeof resultsRowSchema>;
 export type ResultsResponse = z.infer<typeof resultsResponseSchema>;
 export type RepResultsResponse = z.infer<typeof repResultsResponseSchema>;
+export type RepRegisterQuery = z.infer<typeof repRegisterQuerySchema>;
+export type RepRegisterResponse = z.infer<typeof repRegisterResponseSchema>;
 export type EcConfigUpdate = z.infer<typeof ecConfigUpdateSchema>;
 export type EcConfigResponse = z.infer<typeof ecConfigResponseSchema>;
 export type ReleaseStatus = z.infer<typeof releaseStatusSchema>;

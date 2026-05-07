@@ -35,7 +35,7 @@ const app = createApp({
   corsOrigins: env.corsOrigins,
   hcaptchaSecret: env.hcaptchaSecret,
   hcaptchaSiteKey: env.hcaptchaSiteKey,
-  sessionVerifier: env.jwtSecret
+  sessionVerifier: process.env.SESSION_VERIFIER_MODE === "jwt" && env.jwtSecret
     ? new JwtSessionVerifier(env.jwtSecret)
     : new SupabaseSessionVerifier(env.supabaseUrl, env.supabaseServiceRoleKey),
   store: new ElectionStore(pool)

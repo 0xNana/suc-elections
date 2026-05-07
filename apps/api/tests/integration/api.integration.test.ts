@@ -360,6 +360,18 @@ describe.sequential("SUC-VOTE activation flow integration", () => {
     expect(response.body.message).toMatch(/invalid student id or activation code/i);
   });
 
+  it("returns a clear validation message when the activation password is too short", async () => {
+    const response = await request(app).post("/auth/activate").send({
+      student_id: "CSM20254008",
+      activation_code: "ACT23Q",
+      new_password: "Pass1",
+      captcha_token: "test-captcha"
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toBe("Password must be at least 8 characters long");
+  });
+
   it("activates a pending account, burns the code, and auto-logs the user in", async () => {
     const response = await request(app).post("/auth/activate").send({
       student_id: "CSM20254008",
@@ -437,6 +449,9 @@ describe.sequential("SUC-VOTE activation flow integration", () => {
       .send({ student_id: "CSM20252340" });
 
     expect(reset.status).toBe(200);
+    expect(reset.body.student_id).toBe("CSM20252340");
+    expect(reset.body.activation_code).toHaveLength(6);
+    expect(reset.body.activation_code).not.toBe("ACT23Q");
 
     const login = await loginStudent("CSM20252340", "VoteSecure123!");
     expect(login.status).toBe(403);
@@ -478,6 +493,95 @@ describe.sequential("SUC-VOTE activation flow integration", () => {
       });
 
     expect(denied.status).toBe(403);
+  });
+
+  it("paginates the admin students endpoint", async () => {
+    const ecToken = issueRoleToken(seeded.ecAuthId, "ec_admin");
+
+    const response = await request(app)
+      .get("/auth/admin/students")
+      .query({ page: 2, pageSize: 2 })
+      .set("Authorization", `Bearer ${ecToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.page).toBe(2);
+    expect(response.body.pageSize).toBe(2);
+    expect(response.body.total).toBe(6);
+    expect(response.body.students).toHaveLength(2);
+  });
+
+  it("returns an empty EC config payload when no election has been created", async () => {
+    await harness.pool.query(`delete from public.election_config`);
+    const ecToken = issueRoleToken(seeded.ecAuthId, "ec_admin");
+
+    const response = await request(app)
+      .get("/ec/config")
+      .set("Authorization", `Bearer ${ecToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.election).toBeNull();
+    expect(response.body.setup).toMatchObject({
+      positions_count: 2,
+      candidates_count: 3,
+      is_ready_for_polling: true
+    });
+  });
+
+  it("creates the first election config from the EC config endpoint", async () => {
+    await harness.pool.query(`delete from public.election_config`);
+    const ecToken = issueRoleToken(seeded.ecAuthId, "ec_admin");
+
+    const response = await request(app)
+      .post("/ec/config")
+      .set("Authorization", `Bearer ${ecToken}`)
+      .send({
+        poll_opens: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        poll_closes: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+        is_locked: false
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.election).toBeTruthy();
+
+    const configCount = await harness.pool.query<{ total: string }>(
+      `select count(*)::text as total from public.election_config`
+    );
+    expect(configCount.rows[0]?.total).toBe("1");
+  });
+
+  it("extends the poll close time from the EC control endpoint", async () => {
+    const ecToken = issueRoleToken(seeded.ecAuthId, "ec_admin");
+    const before = await harness.pool.query<{ poll_closes: Date }>(
+      `select poll_closes from public.election_config order by poll_closes desc limit 1`
+    );
+
+    const response = await request(app)
+      .post("/ec/config/extend")
+      .set("Authorization", `Bearer ${ecToken}`)
+      .send({ minutes: 30 });
+
+    expect(response.status).toBe(200);
+    expect(response.body.election).toBeTruthy();
+
+    const after = new Date(response.body.election.poll_closes);
+    expect(after.getTime()).toBeGreaterThan(before.rows[0]!.poll_closes.getTime());
+  });
+
+  it("accepts a two-day poll extension from the EC control endpoint", async () => {
+    const ecToken = issueRoleToken(seeded.ecAuthId, "ec_admin");
+    const before = await harness.pool.query<{ poll_closes: Date }>(
+      `select poll_closes from public.election_config order by poll_closes desc limit 1`
+    );
+
+    const response = await request(app)
+      .post("/ec/config/extend")
+      .set("Authorization", `Bearer ${ecToken}`)
+      .send({ minutes: 2 * 24 * 60 });
+
+    expect(response.status).toBe(200);
+
+    const after = new Date(response.body.election.poll_closes);
+    expect(after.getTime()).toBeGreaterThan(before.rows[0]!.poll_closes.getTime());
   });
 
   it("prevents double voting with a 409 response", async () => {
@@ -565,7 +669,89 @@ describe.sequential("SUC-VOTE activation flow integration", () => {
     expect(audit.rows.map((row) => row.event_type)).toEqual(["LOGIN", "VOTE_CAST"]);
   });
 
-  it("blocks rep results until the EC has counted them", async () => {
+  it("returns actor roles in the audit endpoint for rep-visible activity", async () => {
+    await seedDatabase(harness, { pollClosesOffsetMs: 60 * 60 * 1000, countResults: false });
+    const login = await loginStudent();
+    const token = login.body.access_token as string;
+    const repToken = issueRoleToken(seeded.repAuthId, "aspirant_rep", true);
+
+    await request(app)
+      .post("/vote")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        position_id: seeded.presidentPositionId,
+        candidate_id: seeded.firstCandidateId
+      });
+
+    const response = await request(app)
+      .get("/audit")
+      .set("Authorization", `Bearer ${repToken}`);
+
+    expect(response.status).toBe(200);
+
+    const loginEntry = response.body.entries.find((entry: { event_type: string }) => entry.event_type === "LOGIN");
+    const voteEntry = response.body.entries.find((entry: { event_type: string }) => entry.event_type === "VOTE_CAST");
+
+    expect(loginEntry?.actor_role).toBe("voter");
+    expect(voteEntry?.actor_role).toBe("voter");
+  });
+
+  it("filters audit entries by event type", async () => {
+    await seedDatabase(harness, { pollClosesOffsetMs: 60 * 60 * 1000, countResults: false });
+    const login = await loginStudent();
+    const token = login.body.access_token as string;
+    const repToken = issueRoleToken(seeded.repAuthId, "aspirant_rep", true);
+
+    await request(app)
+      .post("/vote")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        position_id: seeded.presidentPositionId,
+        candidate_id: seeded.firstCandidateId
+      });
+
+    const response = await request(app)
+      .get("/audit")
+      .query({ event_type: "VOTE_CAST" })
+      .set("Authorization", `Bearer ${repToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.entries).toHaveLength(1);
+    expect(response.body.entries[0]?.event_type).toBe("VOTE_CAST");
+    expect(response.body.event_counts).toMatchObject({
+      LOGIN: 1,
+      VOTE_CAST: 1
+    });
+  });
+
+  it("returns the voter register for aspirant reps", async () => {
+    const repToken = issueRoleToken(seeded.repAuthId, "aspirant_rep", true);
+
+    const response = await request(app)
+      .get("/rep/register")
+      .set("Authorization", `Bearer ${repToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.page).toBe(1);
+    expect(response.body.pageSize).toBe(20);
+    expect(response.body.total).toBeGreaterThanOrEqual(1);
+    expect(response.body.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          student_id: "CSM20252340",
+          full_name: "Abena Serwaa Mensah",
+          can_vote: true
+        }),
+        expect.objectContaining({
+          student_id: "ECADMIN01",
+          full_name: "Electoral Commission Admin",
+          can_vote: false
+        })
+      ])
+    );
+  });
+
+  it("returns rep overview summary before the EC has counted detailed results", async () => {
     await seedDatabase(harness, { pollClosesOffsetMs: -1_000, countResults: false });
     const repToken = issueRoleToken(seeded.repAuthId, "aspirant_rep", true);
 
@@ -573,8 +759,38 @@ describe.sequential("SUC-VOTE activation flow integration", () => {
       .get("/rep/results")
       .set("Authorization", `Bearer ${repToken}`);
 
-    expect(response.status).toBe(403);
-    expect(response.body.message).toMatch(/awaiting ec count/i);
+    expect(response.status).toBe(200);
+    expect(response.body.summary).toMatchObject({
+      total_votes_cast: 0,
+      total_eligible: 6
+    });
+    expect(response.body.count_state).toMatchObject({
+      is_results_counted: false,
+      results_counted_at: null,
+      results_counted_by: null
+    });
+    expect(response.body.rows).toEqual([]);
+  });
+
+  it("returns provisional rep overview summary while polling is still open", async () => {
+    await seedDatabase(harness, { pollClosesOffsetMs: 60 * 60 * 1000, countResults: false });
+    const repToken = issueRoleToken(seeded.repAuthId, "aspirant_rep", true);
+
+    const response = await request(app)
+      .get("/rep/results")
+      .set("Authorization", `Bearer ${repToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.summary).toMatchObject({
+      total_votes_cast: 0,
+      total_eligible: 6
+    });
+    expect(response.body.count_state).toMatchObject({
+      is_results_counted: false,
+      results_counted_at: null,
+      results_counted_by: null
+    });
+    expect(response.body.rows).toEqual([]);
   });
 
   it("records rep verification after EC count", async () => {
@@ -584,9 +800,10 @@ describe.sequential("SUC-VOTE activation flow integration", () => {
     const response = await request(app)
       .post("/rep/verify")
       .set("Authorization", `Bearer ${repToken}`)
-      .send({ message: "I have approved and verified this count." });
+      .send({ remarks: "Figures match my copy." });
 
     expect(response.status).toBe(200);
+    expect(response.body.message).toBe("EC register signed");
     expect(response.body.verification_state.total_verifications).toBeGreaterThan(0);
   });
 

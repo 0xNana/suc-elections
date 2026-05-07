@@ -9,6 +9,7 @@ import {
   changeStudentRole,
   closeEcPoll,
   countEcResults,
+  extendEcPoll,
   getAdminStudents,
   getAudit,
   getEcConfig,
@@ -27,6 +28,8 @@ import { SiteFrame } from "./site-frame";
 type LiveStatus = "connecting" | "live" | "offline";
 type AdminTab = "issue-codes" | "manage-users" | "election-control" | "audit-log";
 type UserRole = "voter" | "aspirant_rep" | "ec_admin";
+const ADMIN_AUDIT_PAGE_SIZE = 20;
+const ADMIN_STUDENTS_PAGE_SIZE = 20;
 
 interface ScheduleFormState {
   poll_opens: string;
@@ -36,6 +39,10 @@ interface ScheduleFormState {
 
 function isEmptyElectionConfigError(cause: unknown) {
   return cause instanceof BackendError && cause.status === 503 && cause.message === "Election configuration is unavailable";
+}
+
+function isInvalidSessionError(cause: unknown) {
+  return cause instanceof BackendError && cause.status === 401;
 }
 
 function formatNumber(value?: number) {
@@ -59,7 +66,7 @@ function toIsoFromLocal(value: string) {
 
 function getElectionPhase(config: EcConfigResponse["election"] | null) {
   if (!config) {
-    return "Unknown";
+    return "Not set up";
   }
 
   const now = Date.now();
@@ -108,14 +115,62 @@ function buildPositionGroups(rows: EcResultsResponse["rows"] = []) {
   return [...groups.values()];
 }
 
-function buildAuditCounts(entries: AuditResponse["entries"] = []) {
-  const counts = new Map<string, number>();
-
-  for (const entry of entries) {
-    counts.set(entry.event_type, (counts.get(entry.event_type) ?? 0) + 1);
-  }
+function buildAuditCounts(audit: AuditResponse | null) {
+  const counts = new Map(
+    Object.entries(audit?.event_counts ?? {}).map(([eventType, count]) => [eventType, count as number])
+  );
 
   return [...counts.entries()].sort((left, right) => right[1] - left[1]);
+}
+
+function formatEventLabel(eventType: string) {
+  return eventType
+    .toLowerCase()
+    .split("_")
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
+}
+
+function formatActorRole(
+  entry: AuditResponse["entries"][number]
+) {
+  if (entry.actor_role === "ec_admin") {
+    return "EC Admin";
+  }
+
+  if (entry.actor_role === "aspirant_rep") {
+    return "Aspirant Rep";
+  }
+
+  if (entry.actor_role === "voter") {
+    return "Voter";
+  }
+
+  if (
+    [
+      "CODE_ISSUED",
+      "RESET_ACTIVATION",
+      "ROLE_CHANGE",
+      "ELECTION_CONFIG_UPDATED",
+      "POLL_OPENED",
+      "POLL_CLOSED",
+      "POLL_EXTENDED",
+      "RESULTS_COUNTED",
+      "RESULTS_RELEASED"
+    ].includes(entry.event_type)
+  ) {
+    return "EC Admin";
+  }
+
+  if (entry.event_type === "REP_VERIFIED_RESULTS") {
+    return "Aspirant Rep";
+  }
+
+  if (entry.event_type === "VOTE_CAST") {
+    return "Voter";
+  }
+
+  return entry.actor_token ? "User" : "System";
 }
 
 function downloadIssueCodesCsv(result: IssueCodesResponse) {
@@ -279,17 +334,19 @@ function StatusBadge({ liveStatus }: { liveStatus: LiveStatus }) {
 function StatCard({
   label,
   value,
-  note
+  note,
+  compact = false
 }: {
   label: string;
   value: string;
   note: string;
+  compact?: boolean;
 }) {
   return (
-    <div className="rounded-[24px] border border-navy/10 bg-white px-5 py-5">
+    <div className={`border border-navy/10 bg-white ${compact ? "rounded-[20px] px-4 py-4" : "rounded-[24px] px-5 py-5"}`}>
       <p className="text-xs font-semibold uppercase tracking-[0.24em] text-gold">{label}</p>
-      <p className="mt-3 text-4xl font-semibold text-navy">{value}</p>
-      <p className="mt-2 text-sm leading-6 text-stone">{note}</p>
+      <p className={`font-semibold text-navy ${compact ? "mt-2 text-3xl" : "mt-3 text-4xl"}`}>{value}</p>
+      <p className={`text-stone ${compact ? "mt-1 text-sm leading-5" : "mt-2 text-sm leading-6"}`}>{note}</p>
     </div>
   );
 }
@@ -450,13 +507,65 @@ export function AdminDashboardClient() {
   const [issueRole, setIssueRole] = useState<UserRole>("voter");
   const [issueCanVote, setIssueCanVote] = useState(true);
   const [issueResult, setIssueResult] = useState<IssueCodesResponse | null>(null);
+  const [studentsPage, setStudentsPage] = useState(1);
+  const [studentsTotal, setStudentsTotal] = useState(0);
   const [studentsSearch, setStudentsSearch] = useState("");
+  const [activeStudentsSearch, setActiveStudentsSearch] = useState("");
   const [studentsRoleFilter, setStudentsRoleFilter] = useState<"" | UserRole>("");
+  const [activeStudentsRoleFilter, setActiveStudentsRoleFilter] = useState<"" | UserRole>("");
   const [studentsActivationFilter, setStudentsActivationFilter] = useState<"all" | "activated" | "pending">("all");
-  const [auditSearch, setAuditSearch] = useState("");
+  const [activeStudentsActivationFilter, setActiveStudentsActivationFilter] = useState<"all" | "activated" | "pending">("all");
+  const [activeAuditFilter, setActiveAuditFilter] = useState<string | null>(null);
+  const [auditPage, setAuditPage] = useState(1);
+  const [isAuditLogOpen, setIsAuditLogOpen] = useState(false);
+  const [pollExtensionValue, setPollExtensionValue] = useState("30");
+  const [pollExtensionUnit, setPollExtensionUnit] = useState<"minutes" | "hours" | "days">("minutes");
   const accessTokenRef = useRef<string | null>(null);
+  const signingOutRef = useRef(false);
 
   accessTokenRef.current = accessToken;
+
+  async function expireSession(expectedToken?: string) {
+    if (expectedToken && accessTokenRef.current && expectedToken !== accessTokenRef.current) {
+      return;
+    }
+
+    if (signingOutRef.current) {
+      return;
+    }
+
+    signingOutRef.current = true;
+
+    try {
+      await getSupabaseBrowserClient().auth.signOut({ scope: "local" });
+    } catch {
+      // Ignore local sign-out failures and continue clearing client state.
+    } finally {
+      signingOutRef.current = false;
+      accessTokenRef.current = null;
+      startTransition(() => {
+        setAccessToken(null);
+        setConfig(null);
+        setResults(null);
+        setResultsNotice(null);
+        setStudents([]);
+        setAudit(null);
+        setIssueResult(null);
+        setNotice(null);
+        setError("Your session expired. Sign in again.");
+        setScheduleForm({
+          poll_opens: "",
+          poll_closes: "",
+          is_locked: false
+        });
+        setSavingConfig(false);
+        setReleasing(false);
+        setCounting(false);
+        setLoading(false);
+        setBootstrapping(false);
+      });
+    }
+  }
 
   async function refreshElectionState(
     token: string,
@@ -469,18 +578,11 @@ export function AdminDashboardClient() {
     setError(null);
 
     try {
-      let nextConfig: EcConfigResponse | null = null;
-      try {
-        nextConfig = await getEcConfig(token);
-      } catch (cause) {
-        if (!isEmptyElectionConfigError(cause)) {
-          throw cause;
-        }
-      }
+      const nextConfig = await getEcConfig(token);
       let nextResults: EcResultsResponse | null = null;
       let nextResultsNotice: string | null = null;
 
-      if (nextConfig) {
+      if (nextConfig.election) {
         try {
           nextResults = await getEcResults(token);
         } catch (cause) {
@@ -500,7 +602,7 @@ export function AdminDashboardClient() {
         setResults(nextResults);
         setResultsNotice(nextResultsNotice);
         if (options?.syncForm !== false) {
-          if (nextConfig) {
+          if (nextConfig.election) {
             setScheduleForm({
               poll_opens: toDateTimeLocalValue(nextConfig.election.poll_opens),
               poll_closes: toDateTimeLocalValue(nextConfig.election.poll_closes),
@@ -516,6 +618,11 @@ export function AdminDashboardClient() {
         }
       });
     } catch (cause) {
+      if (isInvalidSessionError(cause)) {
+        await expireSession(token);
+        return;
+      }
+
       setError(cause instanceof BackendError ? cause.message : "Unable to load admin dashboard");
     } finally {
       if (!options?.silent) {
@@ -524,50 +631,123 @@ export function AdminDashboardClient() {
     }
   }
 
-  async function refreshStudents(token: string) {
-    const query: {
+  async function refreshStudents(
+    token: string,
+    options?: {
+      page?: number;
       search?: string;
-      role?: UserRole;
-      activation_status?: "all" | "activated" | "pending";
-    } = {
-      activation_status: studentsActivationFilter
-    };
-
-    if (studentsSearch.trim()) {
-      query.search = studentsSearch.trim();
+      role?: "" | UserRole;
+      activationStatus?: "all" | "activated" | "pending";
     }
+  ) {
+    try {
+      const query: {
+        search?: string;
+        role?: UserRole;
+        activation_status?: "all" | "activated" | "pending";
+        page?: number;
+        pageSize?: number;
+      } = {
+        page: options?.page ?? studentsPage,
+        pageSize: ADMIN_STUDENTS_PAGE_SIZE,
+        activation_status: options?.activationStatus ?? activeStudentsActivationFilter
+      };
 
-    if (studentsRoleFilter) {
-      query.role = studentsRoleFilter;
+      const search = options?.search ?? activeStudentsSearch;
+      if (search.trim()) {
+        query.search = search.trim();
+      }
+
+      const role = options?.role ?? activeStudentsRoleFilter;
+      if (role) {
+        query.role = role;
+      }
+
+      const response = await getAdminStudents(token, query);
+      setStudents(response.students);
+      setStudentsPage(response.page);
+      setStudentsTotal(response.total);
+    } catch (cause) {
+      if (isInvalidSessionError(cause)) {
+        await expireSession(token);
+        return;
+      }
+
+      throw cause;
     }
-
-    const response = await getAdminStudents(token, query);
-    setStudents(response.students);
   }
 
-  async function refreshAudit(token: string) {
-    const response = await getAudit(token, auditSearch);
-    setAudit(response);
+  async function refreshAudit(
+    token: string,
+    options?: {
+      page?: number;
+      eventType?: string | null;
+    }
+  ) {
+    try {
+      const hasEventTypeOverride = !!options && Object.prototype.hasOwnProperty.call(options, "eventType");
+      const eventType = hasEventTypeOverride ? (options?.eventType ?? null) : activeAuditFilter;
+      const response = await getAudit(token, "", {
+        eventType: eventType ?? undefined,
+        page: options?.page ?? auditPage,
+        pageSize: ADMIN_AUDIT_PAGE_SIZE
+      });
+      setAudit(response);
+      setAuditPage(response.page);
+    } catch (cause) {
+      if (isInvalidSessionError(cause)) {
+        await expireSession(token);
+        return;
+      }
+
+      throw cause;
+    }
   }
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
     let active = true;
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (!active) {
-        return;
+    void (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!active) {
+          return;
+        }
+
+        const token = data.session?.access_token ?? null;
+        accessTokenRef.current = token;
+        setAccessToken(token);
+
+        if (token) {
+          await Promise.all([
+            refreshElectionState(token),
+            refreshStudents(token, {
+              page: 1,
+              search: "",
+              role: "",
+              activationStatus: "all"
+            }),
+            refreshAudit(token, { page: 1, eventType: null })
+          ]);
+        }
+      } catch (cause) {
+        if (!active) {
+          return;
+        }
+
+        if (isInvalidSessionError(cause)) {
+          await expireSession();
+          return;
+        }
+
+        setError(cause instanceof BackendError ? cause.message : "Unable to restore admin session");
+      } finally {
+        if (active) {
+          setBootstrapping(false);
+        }
       }
-
-      const token = data.session?.access_token ?? null;
-      setAccessToken(token);
-
-      if (token) {
-        void Promise.all([refreshElectionState(token), refreshStudents(token), refreshAudit(token)]);
-      }
-
-      setBootstrapping(false);
-    });
+    })();
 
     const channel = supabase
       .channel("results")
@@ -625,10 +805,16 @@ export function AdminDashboardClient() {
       }
 
       setAccessToken(session.access_token);
+      accessTokenRef.current = session.access_token;
       await Promise.all([
         refreshElectionState(session.access_token),
-        refreshStudents(session.access_token),
-        refreshAudit(session.access_token)
+        refreshStudents(session.access_token, {
+          page: 1,
+          search: activeStudentsSearch,
+          role: activeStudentsRoleFilter,
+          activationStatus: activeStudentsActivationFilter
+        }),
+        refreshAudit(session.access_token, { page: 1, eventType: null })
       ]);
     } catch (cause) {
       setError(cause instanceof BackendError ? cause.message : "Unable to sign in");
@@ -645,12 +831,20 @@ export function AdminDashboardClient() {
       } catch {}
     }
     await supabase.auth.signOut();
+    accessTokenRef.current = null;
     setAccessToken(null);
     setConfig(null);
     setResults(null);
     setResultsNotice(null);
     setStudents([]);
+    setStudentsPage(1);
+    setStudentsTotal(0);
+    setActiveStudentsSearch("");
+    setActiveStudentsRoleFilter("");
+    setActiveStudentsActivationFilter("all");
     setAudit(null);
+    setActiveAuditFilter(null);
+    setIsAuditLogOpen(false);
     setIssueResult(null);
     setNotice(null);
     setError(null);
@@ -690,12 +884,16 @@ export function AdminDashboardClient() {
 
     try {
       const nextConfig = await openEcPoll(accessToken);
+      const election = nextConfig.election;
+      if (!election) {
+        throw new Error("Election configuration is unavailable");
+      }
       startTransition(() => {
         setConfig(nextConfig);
         setScheduleForm({
-          poll_opens: toDateTimeLocalValue(nextConfig.election.poll_opens),
-          poll_closes: toDateTimeLocalValue(nextConfig.election.poll_closes),
-          is_locked: nextConfig.election.is_locked
+          poll_opens: toDateTimeLocalValue(election.poll_opens),
+          poll_closes: toDateTimeLocalValue(election.poll_closes),
+          is_locked: election.is_locked
         });
       });
       setNotice("Poll opened.");
@@ -716,18 +914,71 @@ export function AdminDashboardClient() {
 
     try {
       const nextConfig = await closeEcPoll(accessToken);
+      const election = nextConfig.election;
+      if (!election) {
+        throw new Error("Election configuration is unavailable");
+      }
       startTransition(() => {
         setConfig(nextConfig);
         setScheduleForm({
-          poll_opens: toDateTimeLocalValue(nextConfig.election.poll_opens),
-          poll_closes: toDateTimeLocalValue(nextConfig.election.poll_closes),
-          is_locked: nextConfig.election.is_locked
+          poll_opens: toDateTimeLocalValue(election.poll_opens),
+          poll_closes: toDateTimeLocalValue(election.poll_closes),
+          is_locked: election.is_locked
         });
       });
       setNotice("Poll closed.");
       await refreshElectionState(accessToken, { silent: true, syncForm: false });
     } catch (cause) {
       setError(cause instanceof BackendError ? cause.message : "Unable to close the poll");
+    } finally {
+      setSavingConfig(false);
+    }
+  }
+
+  async function handleExtendPoll() {
+    if (!accessToken) return;
+
+    const value = Number.parseInt(pollExtensionValue, 10);
+    const multiplier =
+      pollExtensionUnit === "days"
+        ? 24 * 60
+        : pollExtensionUnit === "hours"
+          ? 60
+          : 1;
+    const minutes = value * multiplier;
+
+    if (!Number.isFinite(value) || value < 1) {
+      setError("Extension value must be at least 1.");
+      return;
+    }
+
+    if (minutes < 5 || minutes > 7 * 24 * 60) {
+      setError("Extension must stay between 5 minutes and 7 days.");
+      return;
+    }
+
+    setSavingConfig(true);
+    setError(null);
+    setNotice(null);
+
+    try {
+      const nextConfig = await extendEcPoll(accessToken, minutes);
+      const election = nextConfig.election;
+      if (!election) {
+        throw new Error("Election configuration is unavailable");
+      }
+      startTransition(() => {
+        setConfig(nextConfig);
+        setScheduleForm({
+          poll_opens: toDateTimeLocalValue(election.poll_opens),
+          poll_closes: toDateTimeLocalValue(election.poll_closes),
+          is_locked: election.is_locked
+        });
+      });
+      setNotice(`Poll extended by ${value} ${pollExtensionUnit}.`);
+      await refreshElectionState(accessToken, { silent: true, syncForm: false });
+    } catch (cause) {
+      setError(cause instanceof BackendError ? cause.message : "Unable to extend the poll");
     } finally {
       setSavingConfig(false);
     }
@@ -801,7 +1052,38 @@ export function AdminDashboardClient() {
     setLoading(true);
     setError(null);
     try {
-      await refreshStudents(accessToken);
+      const nextSearch = studentsSearch.trim();
+      const nextRole = studentsRoleFilter;
+      const nextActivationStatus = studentsActivationFilter;
+      setActiveStudentsSearch(nextSearch);
+      setActiveStudentsRoleFilter(nextRole);
+      setActiveStudentsActivationFilter(nextActivationStatus);
+      setStudentsPage(1);
+      await refreshStudents(accessToken, {
+        page: 1,
+        search: nextSearch,
+        role: nextRole,
+        activationStatus: nextActivationStatus
+      });
+    } catch (cause) {
+      setError(cause instanceof BackendError ? cause.message : "Unable to load users");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleStudentsPageChange(nextPage: number) {
+    if (!accessToken || nextPage < 1) return;
+    setLoading(true);
+    setError(null);
+    try {
+      setStudentsPage(nextPage);
+      await refreshStudents(accessToken, {
+        page: nextPage,
+        search: activeStudentsSearch,
+        role: activeStudentsRoleFilter,
+        activationStatus: activeStudentsActivationFilter
+      });
     } catch (cause) {
       setError(cause instanceof BackendError ? cause.message : "Unable to load users");
     } finally {
@@ -818,8 +1100,13 @@ export function AdminDashboardClient() {
 
     try {
       const reset = await resetStudentActivation(accessToken, studentId);
-      setNotice(`New activation code issued for ${reset.student_id}.`);
-      await refreshStudents(accessToken);
+      setNotice(`New activation code ${reset.activation_code} issued for index number ${reset.student_id}.`);
+      await refreshStudents(accessToken, {
+        page: studentsPage,
+        search: activeStudentsSearch,
+        role: activeStudentsRoleFilter,
+        activationStatus: activeStudentsActivationFilter
+      });
     } catch (cause) {
       setError(cause instanceof BackendError ? cause.message : "Unable to reset activation");
     } finally {
@@ -837,7 +1124,12 @@ export function AdminDashboardClient() {
     try {
       await changeStudentRole(accessToken, studentId, role, canVote);
       setNotice(`Role updated for ${studentId}.`);
-      await refreshStudents(accessToken);
+      await refreshStudents(accessToken, {
+        page: studentsPage,
+        search: activeStudentsSearch,
+        role: activeStudentsRoleFilter,
+        activationStatus: activeStudentsActivationFilter
+      });
     } catch (cause) {
       setError(cause instanceof BackendError ? cause.message : "Unable to change role");
     } finally {
@@ -845,12 +1137,28 @@ export function AdminDashboardClient() {
     }
   }
 
-  async function handleRefreshAudit() {
+  async function handleAuditPageChange(nextPage: number) {
+    if (!accessToken || nextPage < 1) return;
+    setLoading(true);
+    setError(null);
+    try {
+      setAuditPage(nextPage);
+      await refreshAudit(accessToken, { page: nextPage, eventType: activeAuditFilter });
+    } catch (cause) {
+      setError(cause instanceof BackendError ? cause.message : "Unable to load audit log");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleAuditFilterChange(nextFilter: string | null) {
     if (!accessToken) return;
     setLoading(true);
     setError(null);
     try {
-      await refreshAudit(accessToken);
+      setActiveAuditFilter(nextFilter);
+      setAuditPage(1);
+      await refreshAudit(accessToken, { page: 1, eventType: nextFilter });
     } catch (cause) {
       setError(cause instanceof BackendError ? cause.message : "Unable to load audit log");
     } finally {
@@ -859,20 +1167,41 @@ export function AdminDashboardClient() {
   }
 
   const positionGroups = buildPositionGroups(results?.rows);
-  const auditCounts = buildAuditCounts(audit?.entries);
-  const phase = getElectionPhase(config?.election ?? null);
-  const resultsReleased = config?.election.results_released_at !== null;
-  const resultsCounted = config?.election.results_counted_at !== null;
+  const auditCounts = buildAuditCounts(audit);
+  const currentStudentsPage = studentsPage;
+  const studentsPageSize = ADMIN_STUDENTS_PAGE_SIZE;
+  const studentsStart = studentsTotal === 0 ? 0 : (currentStudentsPage - 1) * studentsPageSize + 1;
+  const studentsEnd = studentsTotal === 0 ? 0 : Math.min(currentStudentsPage * studentsPageSize, studentsTotal);
+  const canGoToPreviousStudentsPage = currentStudentsPage > 1;
+  const canGoToNextStudentsPage = studentsEnd < studentsTotal;
+  const election = config?.election ?? null;
+  const setup = config?.setup ?? {
+    positions_count: 0,
+    candidates_count: 0,
+    eligible_voters: 0,
+    activated_users: 0,
+    votes_cast: 0,
+    is_ready_for_polling: false
+  };
+  const phase = getElectionPhase(election);
+  const resultsReleased = election?.results_released_at != null;
+  const resultsCounted = election?.results_counted_at != null;
   const totalVerifications = results?.verifications.length ?? 0;
   const canReleaseResults =
-    !!config &&
-    Date.now() >= new Date(config.election.poll_closes).getTime() &&
+    !!election &&
+    Date.now() >= new Date(election.poll_closes).getTime() &&
     resultsCounted &&
     totalVerifications > 0;
+  const turnout = setup.eligible_voters > 0 ? Math.round((setup.votes_cast / setup.eligible_voters) * 100) : 0;
 
-  const filteredAuditEntries = useMemo(() => {
-    return audit?.entries ?? [];
-  }, [audit]);
+  const filteredAuditEntries = audit?.entries ?? [];
+  const currentAuditPage = audit?.page ?? auditPage;
+  const auditPageSize = audit?.pageSize ?? ADMIN_AUDIT_PAGE_SIZE;
+  const auditTotal = audit?.total ?? 0;
+  const auditStart = auditTotal === 0 ? 0 : (currentAuditPage - 1) * auditPageSize + 1;
+  const auditEnd = auditTotal === 0 ? 0 : Math.min(currentAuditPage * auditPageSize, auditTotal);
+  const canGoToPreviousAuditPage = currentAuditPage > 1;
+  const canGoToNextAuditPage = auditEnd < auditTotal;
 
   return (
     <SiteFrame
@@ -939,7 +1268,8 @@ export function AdminDashboardClient() {
                 <p className="eyebrow">Issue Codes</p>
                 <h2 className="text-3xl font-semibold text-navy">Generate activation codes</h2>
                 <p className="text-sm leading-7 text-stone">
-                  Paste Student IDs one per line, or use Student ID and full name separated by a comma.
+                  Paste a CSV with <code>Student ID</code> and <code>Full Name</code>. The controls at the right apply
+                  <code> Role</code> and voting access to every row.
                 </p>
               </div>
 
@@ -948,7 +1278,9 @@ export function AdminDashboardClient() {
                   className="input-field min-h-52 resize-y"
                   value={issueCodesText}
                   onChange={(event) => setIssueCodesText(event.target.value)}
-                  placeholder={"SUC100001, Ama Nyarko\nSUC100002, Kwame Mensah"}
+                  placeholder={
+                    "Student ID,Full Name\nCSM20252340,Abena Serwaa Mensah\nMKT20253411,Daniel Chukwudi Okafor\nBFN20251287,Mariam Aissatou Diallo\nACC20254502,Kwesi Boadi Asante\nPCC20252119,Ruth Eniola Adebayo"
+                  }
                 />
                 <div className="space-y-3">
                   <label className="space-y-2 text-sm font-semibold text-navy">
@@ -1135,6 +1467,29 @@ export function AdminDashboardClient() {
                   </tbody>
                 </table>
               </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-stone">
+                  {studentsTotal > 0 ? `Showing ${studentsStart}-${studentsEnd} of ${formatNumber(studentsTotal)} students.` : "No students yet."}
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    className="button-secondary"
+                    type="button"
+                    onClick={() => void handleStudentsPageChange(currentStudentsPage - 1)}
+                    disabled={!canGoToPreviousStudentsPage || loading}
+                  >
+                    Previous
+                  </button>
+                  <button
+                    className="button-secondary"
+                    type="button"
+                    onClick={() => void handleStudentsPageChange(currentStudentsPage + 1)}
+                    disabled={!canGoToNextStudentsPage || loading}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
             </div>
           ) : null}
 
@@ -1149,22 +1504,38 @@ export function AdminDashboardClient() {
                     </div>
                     <StatusBadge liveStatus={liveStatus} />
                   </div>
-                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                    <StatCard label="Status" value={getElectionPhase(config?.election ?? null)} note="Current poll state." />
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <StatCard
-                      label="Results"
-                      value={config?.election.results_released_at ? "Public" : "Sealed"}
-                      note={config?.election.results_released_at ? "Results released." : "Results awaiting EC release."}
+                      compact
+                      label="Poll"
+                      value={phase}
+                      note={
+                        !election
+                          ? "Create the election schedule to begin."
+                          : resultsReleased
+                            ? "Results public."
+                            : resultsCounted
+                              ? "Count completed."
+                              : "Current poll state."
+                      }
                     />
                     <StatCard
-                      label="Count"
-                      value={config?.election.results_counted_at ? "Ready" : "Pending"}
-                      note={config?.election.results_counted_at ? "The official count has been generated." : "Generate the count after polls close."}
+                      compact
+                      label="Ballot"
+                      value={`${formatNumber(setup.positions_count)} / ${formatNumber(setup.candidates_count)}`}
+                      note={setup.is_ready_for_polling ? "Positions and candidates are ready." : "Add the offices and candidates before opening the poll."}
                     />
                     <StatCard
-                      label="Rep checks"
-                      value={formatNumber(results?.verifications.length ?? 0)}
-                      note="Verification messages received."
+                      compact
+                      label="Eligible voters"
+                      value={formatNumber(setup.eligible_voters)}
+                      note={`${formatNumber(setup.activated_users)} activated account(s).`}
+                    />
+                    <StatCard
+                      compact
+                      label="Turnout"
+                      value={`${turnout}%`}
+                      note={`${formatNumber(setup.votes_cast)} vote(s) cast.`}
                     />
                   </div>
                 </div>
@@ -1174,31 +1545,89 @@ export function AdminDashboardClient() {
                     <p className="eyebrow">Actions</p>
                     <h2 className="text-3xl font-semibold text-navy">Quick control</h2>
                   </div>
-                  <div className="flex flex-wrap gap-3">
-                    <button className="button-primary" type="button" onClick={() => void handleOpenPollNow()} disabled={savingConfig}>
-                      {savingConfig ? "Working..." : "Open poll now"}
-                    </button>
-                    <button className="button-secondary" type="button" onClick={() => void handleClosePollNow()} disabled={savingConfig}>
-                      Close poll now
-                    </button>
-                    <button className="button-primary" type="button" onClick={() => void handleCountResults()} disabled={counting}>
-                      {counting ? "Counting..." : "Count results"}
-                    </button>
-                    <button
-                      className="button-primary"
-                      type="button"
-                      onClick={() => void handleReleaseResults()}
-                      disabled={releasing || !!config?.election.results_released_at || !(!!config && Date.now() >= new Date(config.election.poll_closes).getTime() && !!config.election.results_counted_at && (results?.verifications.length ?? 0) > 0)}
-                    >
-                      {config?.election.results_released_at ? "Results already public" : releasing ? "Releasing..." : "Release results"}
-                    </button>
-                  </div>
-                  {config ? (
-                    <div className="rounded-[22px] border border-navy/10 bg-cream/70 px-4 py-4 text-sm text-stone">
-                      Polls open {new Date(config.election.poll_opens).toLocaleString()} and close{" "}
-                      {new Date(config.election.poll_closes).toLocaleString()}.
+                  <div className="rounded-[22px] border border-navy/10 bg-cream/70 px-4 py-4">
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          className="button-primary"
+                          type="button"
+                          onClick={() => void handleOpenPollNow()}
+                          disabled={savingConfig || !setup.is_ready_for_polling}
+                        >
+                          {savingConfig ? "Working..." : "Open poll now"}
+                        </button>
+                        <button
+                          className="button-secondary"
+                          type="button"
+                          onClick={() => void handleClosePollNow()}
+                          disabled={savingConfig || !election}
+                        >
+                          Close poll now
+                        </button>
+                        <button
+                          className="button-primary"
+                          type="button"
+                          onClick={() => void handleCountResults()}
+                          disabled={counting || !election}
+                        >
+                          {counting ? "Counting..." : "Count results"}
+                        </button>
+                        <button
+                          className="button-primary"
+                          type="button"
+                          onClick={() => void handleReleaseResults()}
+                          disabled={releasing || resultsReleased || !canReleaseResults}
+                        >
+                          {resultsReleased ? "Results already public" : releasing ? "Releasing..." : "Release results"}
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap items-end gap-3 rounded-[18px] border border-navy/10 bg-white px-4 py-3">
+                        <label className="space-y-2 text-sm font-semibold text-navy">
+                          Extend by
+                          <input
+                            type="number"
+                            min={1}
+                            step={1}
+                            className="input-field w-24"
+                            value={pollExtensionValue}
+                            onChange={(event) => setPollExtensionValue(event.target.value)}
+                            disabled={savingConfig || !election || resultsCounted || resultsReleased}
+                          />
+                        </label>
+                        <label className="space-y-2 text-sm font-semibold text-navy">
+                          <span className="visually-hidden">Unit</span>
+                          <select
+                            className="input-field min-w-[120px]"
+                            value={pollExtensionUnit}
+                            onChange={(event) => setPollExtensionUnit(event.target.value as "minutes" | "hours" | "days")}
+                            disabled={savingConfig || !election || resultsCounted || resultsReleased}
+                          >
+                            <option value="minutes">minutes</option>
+                            <option value="hours">hours</option>
+                            <option value="days">days</option>
+                          </select>
+                        </label>
+                        <button
+                          className="button-secondary"
+                          type="button"
+                          onClick={() => void handleExtendPoll()}
+                          disabled={savingConfig || !election || resultsCounted || resultsReleased}
+                        >
+                          Extend poll
+                        </button>
+                      </div>
                     </div>
-                  ) : null}
+                  </div>
+                  {election ? (
+                    <div className="rounded-[22px] border border-navy/10 bg-cream/70 px-4 py-4 text-sm text-stone">
+                      Polls open {new Date(election.poll_opens).toLocaleString()} and close{" "}
+                      {new Date(election.poll_closes).toLocaleString()}.
+                    </div>
+                  ) : (
+                    <div className="rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-800">
+                      No election schedule exists yet. Set the poll window below, or use Open poll now once the ballot is ready.
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1206,6 +1635,9 @@ export function AdminDashboardClient() {
                 <div className="space-y-2">
                   <p className="eyebrow">Schedule</p>
                   <h2 className="text-3xl font-semibold text-navy">Set poll times</h2>
+                  <p className="text-sm leading-7 text-stone">
+                    Saving this form creates the election if none exists yet.
+                  </p>
                 </div>
                 <form className="grid gap-4 lg:grid-cols-[1fr_1fr_auto] lg:items-end" onSubmit={handleSaveSchedule}>
                   <div className="space-y-2">
@@ -1242,7 +1674,7 @@ export function AdminDashboardClient() {
                       <span>Keep poll locked</span>
                     </label>
                     <button className="button-primary w-full" type="submit" disabled={savingConfig}>
-                      {savingConfig ? "Saving..." : "Save schedule"}
+                      {savingConfig ? "Saving..." : election ? "Save schedule" : "Create election"}
                     </button>
                   </div>
                 </form>
@@ -1261,7 +1693,7 @@ export function AdminDashboardClient() {
                   </div>
                 ) : (
                   <div className="rounded-[24px] border border-navy/10 bg-cream/70 px-5 py-5 text-sm text-stone">
-                    {resultsNotice ?? "Vote totals appear here after polls close."}
+                    {resultsNotice ?? (!election ? "Create the election first. Counted results will appear here later." : "Vote totals appear here after polls close.")}
                   </div>
                 )}
               </div>
@@ -1271,62 +1703,136 @@ export function AdminDashboardClient() {
           {activeTab === "audit-log" ? (
             <div className="section-panel space-y-5">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                <div className="space-y-2">
+                <div className="w-full space-y-2">
                   <p className="eyebrow">Audit Log</p>
-                  <h2 className="text-3xl font-semibold text-navy">Recent actions</h2>
-                </div>
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <input
-                    className="input-field"
-                    value={auditSearch}
-                    onChange={(event) => setAuditSearch(event.target.value)}
-                    placeholder="Search audit log"
-                  />
-                  <button className="button-primary" type="button" onClick={() => void handleRefreshAudit()}>
-                    Refresh
-                  </button>
                   <button
-                    className="button-secondary"
                     type="button"
-                    onClick={() => audit && downloadAuditCsv(audit)}
-                    disabled={!audit}
+                    onClick={() => setIsAuditLogOpen((current) => !current)}
+                    className="flex w-full items-center justify-between rounded-[20px] border border-navy/10 bg-cream/70 px-4 py-4 text-left"
+                    aria-expanded={isAuditLogOpen}
                   >
-                    Export CSV
+                    <div>
+                      <h2 className="text-2xl font-semibold text-navy">Recent actions</h2>
+                      <p className="mt-1 text-sm leading-6 text-stone">
+                        {formatNumber(auditTotal)} action(s) in the log.
+                      </p>
+                    </div>
+                    <span className="text-sm font-semibold text-navy">
+                      {isAuditLogOpen ? "Hide" : "View"}
+                    </span>
                   </button>
                 </div>
               </div>
-              {auditCounts.length ? (
-                <div className="flex flex-wrap gap-3">
-                  {auditCounts.map(([eventType, count]) => (
-                    <div key={eventType} className="rounded-full border border-navy/10 bg-cream/75 px-4 py-2 text-sm text-navy">
-                      <span className="font-semibold">{eventType}</span>
-                      <span className="ml-2 text-stone">{formatNumber(count)}</span>
+              {isAuditLogOpen ? (
+                <>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    {auditCounts.length ? (
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          className={`rounded-full border px-4 py-2 text-sm ${
+                            activeAuditFilter === null
+                              ? "border-navy bg-navy text-cream"
+                              : "border-navy/10 bg-cream/75 text-navy"
+                          }`}
+                          type="button"
+                          onClick={() => void handleAuditFilterChange(null)}
+                        >
+                          <span className="font-semibold">All</span>
+                        </button>
+                        {auditCounts.map(([eventType, count]) => (
+                          <button
+                            key={eventType}
+                            className={`rounded-full border px-4 py-2 text-sm ${
+                              activeAuditFilter === eventType
+                                ? "border-navy bg-navy text-cream"
+                                : "border-navy/10 bg-cream/75 text-navy"
+                            }`}
+                            type="button"
+                            onClick={() => void handleAuditFilterChange(activeAuditFilter === eventType ? null : eventType)}
+                          >
+                            <span className="font-semibold">{formatEventLabel(eventType)}</span>
+                            <span className={`ml-2 ${activeAuditFilter === eventType ? "text-cream/80" : "text-stone"}`}>
+                              {formatNumber(count)}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : activeAuditFilter ? (
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          className="rounded-full border border-navy bg-navy px-4 py-2 text-sm text-cream"
+                          type="button"
+                          onClick={() => void handleAuditFilterChange(null)}
+                        >
+                          <span className="font-semibold">All</span>
+                        </button>
+                        <button
+                          className="rounded-full border border-navy bg-navy px-4 py-2 text-sm text-cream"
+                          type="button"
+                          onClick={() => void handleAuditFilterChange(null)}
+                        >
+                          <span className="font-semibold">{formatEventLabel(activeAuditFilter)}</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div />
+                    )}
+                    <button
+                      className="button-secondary"
+                      type="button"
+                      onClick={() => audit && downloadAuditCsv(audit)}
+                      disabled={!audit}
+                    >
+                      Export CSV
+                    </button>
+                  </div>
+                  <div className="overflow-hidden rounded-[24px] border border-navy/10">
+                    <table className="min-w-full divide-y divide-navy/10 text-left text-sm">
+                      <thead className="bg-navy text-cream">
+                        <tr>
+                          <th className="px-4 py-3 font-medium">Action</th>
+                          <th className="px-4 py-3 font-medium">Role</th>
+                          <th className="px-4 py-3 font-medium">IP address</th>
+                          <th className="px-4 py-3 font-medium">Time</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-navy/10 bg-white">
+                        {filteredAuditEntries.map((entry) => (
+                          <tr key={entry.id}>
+                            <td className="px-4 py-3 text-navy">{formatEventLabel(entry.event_type)}</td>
+                            <td className="px-4 py-3 text-stone">{formatActorRole(entry)}</td>
+                            <td className="px-4 py-3 text-stone">{entry.ip_address ?? "N/A"}</td>
+                            <td className="px-4 py-3 text-stone">{new Date(entry.logged_at).toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm text-stone">
+                      {auditTotal > 0 ? `Showing ${auditStart}-${auditEnd} of ${formatNumber(auditTotal)} actions.` : "No actions yet."}
+                    </p>
+                    <div className="flex gap-3">
+                      <button
+                        className="button-secondary"
+                        type="button"
+                        onClick={() => void handleAuditPageChange(currentAuditPage - 1)}
+                        disabled={!canGoToPreviousAuditPage || loading}
+                      >
+                        Previous
+                      </button>
+                      <button
+                        className="button-secondary"
+                        type="button"
+                        onClick={() => void handleAuditPageChange(currentAuditPage + 1)}
+                        disabled={!canGoToNextAuditPage || loading}
+                      >
+                        Next
+                      </button>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                </>
               ) : null}
-              <div className="overflow-hidden rounded-[24px] border border-navy/10">
-                <table className="min-w-full divide-y divide-navy/10 text-left text-sm">
-                  <thead className="bg-navy text-cream">
-                    <tr>
-                      <th className="px-4 py-3 font-medium">Action</th>
-                      <th className="px-4 py-3 font-medium">Actor</th>
-                      <th className="px-4 py-3 font-medium">IP address</th>
-                      <th className="px-4 py-3 font-medium">Time</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-navy/10 bg-white">
-                    {filteredAuditEntries.map((entry) => (
-                      <tr key={entry.id}>
-                        <td className="px-4 py-3 text-navy">{entry.event_type}</td>
-                        <td className="px-4 py-3 text-stone">{entry.actor_token ?? "N/A"}</td>
-                        <td className="px-4 py-3 text-stone">{entry.ip_address ?? "N/A"}</td>
-                        <td className="px-4 py-3 text-stone">{new Date(entry.logged_at).toLocaleString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
             </div>
           ) : null}
         </section>

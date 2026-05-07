@@ -12,6 +12,7 @@ import {
   changeRoleRequestSchema,
   changeRoleResponseSchema,
   ecConfigResponseSchema,
+  ecPollExtendSchema,
   ecConfigUpdateSchema,
   ecCountResponseSchema,
   ecReleaseResponseSchema,
@@ -20,6 +21,8 @@ import {
   issueCodesResponseSchema,
   loginRequestSchema,
   repResultsResponseSchema,
+  repRegisterQuerySchema,
+  repRegisterResponseSchema,
   repVerifyRequestSchema,
   repVerifyResponseSchema,
   resetActivationRequestSchema,
@@ -142,6 +145,7 @@ function serializeAuditRows(
     id: number;
     event_type: string;
     actor_token: string | null;
+    actor_role: "voter" | "aspirant_rep" | "ec_admin" | null;
     ip_address: string | null;
     payload_hash: string | null;
     metadata: Record<string, unknown> | null;
@@ -191,6 +195,35 @@ function serializeElectionConfig(config: {
     results_counted_by: config.results_counted_by ?? null,
     results_released_at: config.results_released_at?.toISOString() ?? null,
     results_released_by: config.results_released_by ?? null
+  };
+}
+
+function buildEcConfigResponse(
+  config:
+    | {
+        id: string;
+        poll_opens: Date;
+        poll_closes: Date;
+        is_locked: boolean;
+        results_counted_at: Date | null;
+        results_counted_by: string | null;
+        results_released_at: Date | null;
+        results_released_by: string | null;
+      }
+    | null,
+  setup: {
+    positions_count: number;
+    candidates_count: number;
+    eligible_voters: number;
+    activated_users: number;
+    votes_cast: number;
+    is_ready_for_polling: boolean;
+  }
+) {
+  return {
+    election: config ? serializeElectionConfig(config) : null,
+    setup,
+    refreshed_at: new Date().toISOString()
   };
 }
 
@@ -411,7 +444,7 @@ export function createApp(dependencies: AppDependencies) {
     asyncHandler(async (request, response) => {
       const parsed = activationRequestSchema.safeParse(request.body);
       if (!parsed.success) {
-        throw new ApiError(400, "Invalid activation payload");
+        throw new ApiError(400, parsed.error.issues[0]?.message ?? "Invalid activation payload");
       }
 
       // TODO: Re-enable hCaptcha verification for activation before production hardening.
@@ -692,6 +725,8 @@ export function createApp(dependencies: AppDependencies) {
       }
 
       const students = await dependencies.store.listStudentsForAdmin({
+        page: parsed.data.page,
+        pageSize: parsed.data.pageSize,
         search: parsed.data.search,
         role: parsed.data.role,
         activationStatus: parsed.data.activation_status
@@ -699,7 +734,7 @@ export function createApp(dependencies: AppDependencies) {
 
       response.json(
         adminStudentsResponseSchema.parse({
-          students: students.map((student) => ({
+          students: students.rows.map((student) => ({
             student_id: student.student_id,
             full_name: student.full_name,
             role: student.role,
@@ -707,7 +742,10 @@ export function createApp(dependencies: AppDependencies) {
             activated: student.activated,
             activated_at: student.activated_at?.toISOString() ?? null,
             last_login_at: student.last_login_at?.toISOString() ?? null
-          }))
+          })),
+          page: parsed.data.page,
+          pageSize: parsed.data.pageSize,
+          total: students.total
         })
       );
     })
@@ -872,16 +910,13 @@ export function createApp(dependencies: AppDependencies) {
     requireAuth(dependencies.sessionVerifier),
     requireEcRole,
     asyncHandler(async (_request: AuthenticatedRequest, response) => {
-      const config = await dependencies.store.getElectionConfig();
-      if (!config) {
-        throw new ApiError(503, "Election configuration is unavailable");
-      }
+      const [config, setup] = await Promise.all([
+        dependencies.store.getElectionConfig(),
+        dependencies.store.getElectionSetupSummary()
+      ]);
 
       response.json(
-        ecConfigResponseSchema.parse({
-          election: serializeElectionConfig(config),
-          refreshed_at: new Date().toISOString()
-        })
+        ecConfigResponseSchema.parse(buildEcConfigResponse(config, setup))
       );
     })
   );
@@ -896,15 +931,12 @@ export function createApp(dependencies: AppDependencies) {
         throw new ApiError(400, "Invalid election configuration");
       }
 
-      const config = await dependencies.store.updateElectionConfig({
+      const config = await dependencies.store.upsertElectionConfig({
         pollOpens: parsed.data.poll_opens,
         pollCloses: parsed.data.poll_closes,
         isLocked: parsed.data.is_locked
       });
-
-      if (!config) {
-        throw new ApiError(503, "Election configuration is unavailable");
-      }
+      const setup = await dependencies.store.getElectionSetupSummary();
 
       await dependencies.store.insertAuditEvent({
         eventType: "ELECTION_CONFIG_UPDATED",
@@ -920,10 +952,7 @@ export function createApp(dependencies: AppDependencies) {
       });
 
       response.json(
-        ecConfigResponseSchema.parse({
-          election: serializeElectionConfig(config),
-          refreshed_at: new Date().toISOString()
-        })
+        ecConfigResponseSchema.parse(buildEcConfigResponse(config, setup))
       );
     })
   );
@@ -933,6 +962,11 @@ export function createApp(dependencies: AppDependencies) {
     requireAuth(dependencies.sessionVerifier),
     requireEcRole,
     asyncHandler(async (request: AuthenticatedRequest, response) => {
+      const setup = await dependencies.store.getElectionSetupSummary();
+      if (!setup.is_ready_for_polling) {
+        throw new ApiError(403, "Add positions and candidates before opening the poll");
+      }
+
       const config = await dependencies.store.openPollNow();
       if (!config) {
         throw new ApiError(503, "Election configuration is unavailable");
@@ -951,10 +985,7 @@ export function createApp(dependencies: AppDependencies) {
       });
 
       response.json(
-        ecConfigResponseSchema.parse({
-          election: serializeElectionConfig(config),
-          refreshed_at: new Date().toISOString()
-        })
+        ecConfigResponseSchema.parse(buildEcConfigResponse(config, setup))
       );
     })
   );
@@ -968,6 +999,7 @@ export function createApp(dependencies: AppDependencies) {
       if (!config) {
         throw new ApiError(503, "Election configuration is unavailable");
       }
+      const setup = await dependencies.store.getElectionSetupSummary();
 
       await dependencies.store.insertAuditEvent({
         eventType: "POLL_CLOSED",
@@ -982,10 +1014,50 @@ export function createApp(dependencies: AppDependencies) {
       });
 
       response.json(
-        ecConfigResponseSchema.parse({
-          election: serializeElectionConfig(config),
-          refreshed_at: new Date().toISOString()
-        })
+        ecConfigResponseSchema.parse(buildEcConfigResponse(config, setup))
+      );
+    })
+  );
+
+  app.post(
+    "/ec/config/extend",
+    requireAuth(dependencies.sessionVerifier),
+    requireEcRole,
+    asyncHandler(async (request: AuthenticatedRequest, response) => {
+      const parsed = ecPollExtendSchema.safeParse(request.body);
+      if (!parsed.success) {
+        throw new ApiError(400, parsed.error.issues[0]?.message ?? "Invalid poll extension payload");
+      }
+
+      const existing = await dependencies.store.getElectionConfig();
+      if (!existing) {
+        throw new ApiError(503, "Election configuration is unavailable");
+      }
+
+      if (existing.results_counted_at || existing.results_released_at) {
+        throw new ApiError(403, "Poll cannot be extended after the results process has started");
+      }
+
+      const config = await dependencies.store.extendPollByMinutes(parsed.data.minutes);
+      if (!config) {
+        throw new ApiError(503, "Election configuration is unavailable");
+      }
+      const setup = await dependencies.store.getElectionSetupSummary();
+
+      await dependencies.store.insertAuditEvent({
+        eventType: "POLL_EXTENDED",
+        actorToken: request.auth!.sub,
+        ipAddress: getClientIp(request),
+        payloadHash: sha256(`poll-extended:${config.poll_closes.toISOString()}:${parsed.data.minutes}`),
+        metadata: {
+          ec_auth_user_id: request.auth!.sub,
+          poll_closes: config.poll_closes.toISOString(),
+          minutes: parsed.data.minutes
+        }
+      });
+
+      response.json(
+        ecConfigResponseSchema.parse(buildEcConfigResponse(config, setup))
       );
     })
   );
@@ -1143,6 +1215,30 @@ export function createApp(dependencies: AppDependencies) {
   );
 
   app.get(
+    "/rep/register",
+    requireAuth(dependencies.sessionVerifier),
+    requireRepRole,
+    asyncHandler(async (request: AuthenticatedRequest, response) => {
+      const parsed = repRegisterQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        throw new ApiError(400, "Invalid register query");
+      }
+
+      const register = await dependencies.store.listRepRegisterRows(parsed.data);
+
+      response.json(
+        repRegisterResponseSchema.parse({
+          rows: register.rows,
+          page: parsed.data.page,
+          pageSize: parsed.data.pageSize,
+          total: register.total,
+          refreshed_at: new Date().toISOString()
+        })
+      );
+    })
+  );
+
+  app.get(
     "/rep/results",
     requireAuth(dependencies.sessionVerifier),
     requireRepRole,
@@ -1152,18 +1248,11 @@ export function createApp(dependencies: AppDependencies) {
         throw new ApiError(503, "Election configuration is unavailable");
       }
 
-      if (new Date() < config.poll_closes) {
-        throw new ApiError(403, "Results are unavailable until polls close");
-      }
-
-      if (!config.results_counted_at) {
-        throw new ApiError(403, "Results are awaiting EC count");
-      }
-
-      const verifications = await dependencies.store.listResultVerifications(config.id);
-      const [rows, summary] = await Promise.all([
-        dependencies.store.getResults(),
-        dependencies.store.getRepSummary()
+      const isResultsCounted = config.results_counted_at !== null;
+      const [rows, summary, verifications] = await Promise.all([
+        isResultsCounted ? dependencies.store.getResults() : Promise.resolve([]),
+        dependencies.store.getRepSummary(),
+        isResultsCounted ? dependencies.store.listResultVerifications(config.id) : Promise.resolve([])
       ]);
 
       response.json(
@@ -1171,9 +1260,9 @@ export function createApp(dependencies: AppDependencies) {
           rows,
           summary,
           count_state: {
-            is_results_counted: true,
-            results_counted_at: config.results_counted_at.toISOString(),
-            results_counted_by: config.results_counted_by
+            is_results_counted: isResultsCounted,
+            results_counted_at: config.results_counted_at?.toISOString() ?? null,
+            results_counted_by: config.results_counted_by ?? null
           },
           verification_state: {
             is_verified_by_any_rep: verifications.length > 0,
@@ -1192,7 +1281,7 @@ export function createApp(dependencies: AppDependencies) {
     asyncHandler(async (request: AuthenticatedRequest, response) => {
       const parsed = repVerifyRequestSchema.safeParse(request.body);
       if (!parsed.success) {
-        throw new ApiError(400, "Invalid verification message");
+        throw new ApiError(400, "Invalid register signoff payload");
       }
 
       const config = await dependencies.store.getElectionConfig();
@@ -1208,10 +1297,13 @@ export function createApp(dependencies: AppDependencies) {
         throw new ApiError(403, "Results are awaiting EC count");
       }
 
+      const remarks = parsed.data.remarks?.trim() || null;
+      const signoffMessage = remarks ? `Signed EC register. Remarks: ${remarks}` : "Signed EC register.";
+
       const verification = await dependencies.store.saveResultVerification({
         electionConfigId: config.id,
         verifierAuthUserId: request.auth!.sub,
-        message: parsed.data.message
+        message: signoffMessage
       });
 
       const verifications = await dependencies.store.listResultVerifications(config.id);
@@ -1220,16 +1312,17 @@ export function createApp(dependencies: AppDependencies) {
         eventType: "REP_VERIFIED_RESULTS",
         actorToken: request.auth!.sub,
         ipAddress: getClientIp(request),
-        payloadHash: sha256(`rep-verify:${request.auth!.sub}:${parsed.data.message}`),
+        payloadHash: sha256(`rep-verify:${request.auth!.sub}:${signoffMessage}`),
         metadata: {
           rep_auth_user_id: request.auth!.sub,
-          message: parsed.data.message
+          remarks,
+          signoff: true
         }
       });
 
       response.json(
         repVerifyResponseSchema.parse({
-          message: "Verification recorded",
+          message: "EC register signed",
           verification: {
             id: verification!.id,
             verifier_auth_user_id: verification!.verifier_auth_user_id,
@@ -1263,6 +1356,7 @@ export function createApp(dependencies: AppDependencies) {
 
       response.json({
         entries: serializeAuditRows(audit.entries),
+        event_counts: audit.event_counts,
         page: parsed.data.page,
         pageSize: parsed.data.pageSize,
         total: audit.total,

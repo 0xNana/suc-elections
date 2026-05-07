@@ -11,6 +11,7 @@ import type {
   ResetActivationResponse,
   RepVerifyResponse,
   RepResultsResponse,
+  RepRegisterResponse,
   ResultsResponse,
   SessionResponse,
   VoteConfirmation
@@ -121,12 +122,16 @@ export function issueActivationCodes(
 export function getAdminStudents(
   accessToken: string,
   input?: {
+    page?: number;
+    pageSize?: number;
     search?: string;
     role?: "voter" | "aspirant_rep" | "ec_admin";
     activation_status?: "all" | "activated" | "pending";
   }
 ) {
   const query = new URLSearchParams();
+  query.set("page", String(input?.page ?? 1));
+  query.set("pageSize", String(input?.pageSize ?? 20));
   if (input?.search) query.set("search", input.search);
   if (input?.role) query.set("role", input.role);
   if (input?.activation_status) query.set("activation_status", input.activation_status);
@@ -185,6 +190,23 @@ export function getRepResults(accessToken: string) {
   });
 }
 
+export function getRepRegister(
+  accessToken: string,
+  input?: {
+    page?: number;
+    pageSize?: number;
+  }
+) {
+  const query = new URLSearchParams({
+    page: String(input?.page ?? 1),
+    pageSize: String(input?.pageSize ?? 20)
+  });
+
+  return backendRequest<RepRegisterResponse>(`/rep/register?${query.toString()}`, {
+    accessToken
+  });
+}
+
 export function getEcResults(accessToken: string) {
   return backendRequest<EcResultsResponse>("/ec/results", {
     accessToken
@@ -222,6 +244,14 @@ export function closeEcPoll(accessToken: string) {
   });
 }
 
+export function extendEcPoll(accessToken: string, minutes: number) {
+  return backendRequest<EcConfigResponse>("/ec/config/extend", {
+    method: "POST",
+    accessToken,
+    body: { minutes }
+  });
+}
+
 export function releaseEcResults(accessToken: string) {
   return backendRequest<EcReleaseResponse>("/ec/results/release", {
     method: "POST",
@@ -236,14 +266,26 @@ export function countEcResults(accessToken: string) {
   });
 }
 
-export function getAudit(accessToken: string, search = "") {
+export function getAudit(
+  accessToken: string,
+  search = "",
+  input?: {
+    eventType?: string | undefined;
+    page?: number;
+    pageSize?: number;
+  }
+) {
   const query = new URLSearchParams({
-    page: "1",
-    pageSize: "25"
+    page: String(input?.page ?? 1),
+    pageSize: String(input?.pageSize ?? 25)
   });
 
   if (search.trim()) {
     query.set("search", search.trim());
+  }
+
+  if (input?.eventType) {
+    query.set("event_type", input.eventType);
   }
 
   return backendRequest<AuditResponse>(`/audit?${query.toString()}`, {
@@ -251,10 +293,15 @@ export function getAudit(accessToken: string, search = "") {
   });
 }
 
-export function verifyRepResults(accessToken: string, message: string) {
+export function verifyRepResults(
+  accessToken: string,
+  input?: {
+    remarks?: string;
+  }
+) {
   return backendRequest<RepVerifyResponse>("/rep/verify", {
     method: "POST",
     accessToken,
-    body: { message }
+    body: { remarks: input?.remarks }
   });
 }
