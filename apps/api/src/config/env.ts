@@ -20,6 +20,10 @@ function readRequired(...names: string[]) {
 }
 
 function parseCorsOrigins(value: string | undefined) {
+  if (!value && process.env.NODE_ENV === "production") {
+    throw new Error("Missing required environment variable: CORS_ORIGIN");
+  }
+
   const source = value ?? "http://localhost:3000";
   return source
     .split(",")

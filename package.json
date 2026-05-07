@@ -16,6 +16,11 @@
     "typecheck": "pnpm -r typecheck",
     "db:seed": "pnpm --filter @suc-vote/db seed"
   },
+  "pnpm": {
+    "overrides": {
+      "postcss": "^8.5.10"
+    }
+  },
   "devDependencies": {
     "@types/node": "^22.15.17",
     "typescript": "^5.8.3"

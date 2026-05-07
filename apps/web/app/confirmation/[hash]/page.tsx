@@ -2,7 +2,9 @@ import Link from "next/link";
 
 import { SiteFrame } from "../../../components/site-frame";
 
-export default function ConfirmationPage({ params }: { params: { hash: string } }) {
+export default async function ConfirmationPage({ params }: { params: Promise<{ hash: string }> }) {
+  const { hash } = await params;
+
   return (
     <SiteFrame
       eyebrow="Confirmation receipt"
@@ -12,7 +14,7 @@ export default function ConfirmationPage({ params }: { params: { hash: string } 
       <section className="mx-auto w-full max-w-2xl section-panel space-y-6">
         <div className="rounded-[24px] border border-gold/25 bg-cream/80 px-5 py-5">
           <p className="text-xs font-semibold uppercase tracking-[0.28em] text-gold">Confirmation hash</p>
-          <p className="mt-3 break-all font-mono text-lg text-navy">{params.hash}</p>
+          <p className="mt-3 break-all font-mono text-lg text-navy">{hash}</p>
         </div>
 
         <div className="flex flex-wrap gap-3">

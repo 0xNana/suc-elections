@@ -44,8 +44,27 @@ function getOrigin(value) {
   }
 }
 
-const apiOrigin = getOrigin(process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000");
-const supabaseOrigin = getOrigin(process.env.NEXT_PUBLIC_SUPABASE_URL);
+function readRequiredPublicEnv(name, fallback) {
+  const value = process.env[name] ?? fallback;
+  if (!value && process.env.NODE_ENV === "production") {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+
+  return value;
+}
+
+const supabaseUrl = readRequiredPublicEnv("NEXT_PUBLIC_SUPABASE_URL");
+const supabaseAnonKey = readRequiredPublicEnv(
+  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+);
+const apiUrl = readRequiredPublicEnv(
+  "NEXT_PUBLIC_API_URL",
+  process.env.NODE_ENV === "production" ? undefined : "http://localhost:4000"
+);
+
+const apiOrigin = getOrigin(apiUrl);
+const supabaseOrigin = getOrigin(supabaseUrl);
 const supabaseRealtimeOrigin = supabaseOrigin?.replace(/^http/, "ws") ?? null;
 const connectSrc = ["'self'", apiOrigin, supabaseOrigin, supabaseRealtimeOrigin].filter(Boolean).join(" ");
 const csp = [
@@ -66,6 +85,7 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   productionBrowserSourceMaps: false,
+  outputFileTracingRoot: path.resolve(__dirname, "../.."),
   transpilePackages: ["@suc-vote/shared", "@suc-vote/db"],
   async headers() {
     if (process.env.NODE_ENV !== "production") {
@@ -87,11 +107,9 @@ const nextConfig = {
     ];
   },
   env: {
-    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    NEXT_PUBLIC_SUPABASE_ANON_KEY:
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
-      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000",
+    NEXT_PUBLIC_SUPABASE_URL: supabaseUrl,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: supabaseAnonKey,
+    NEXT_PUBLIC_API_URL: apiUrl,
     NEXT_PUBLIC_HCAPTCHA_SITE_KEY:
       process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY ??
       process.env.HCAPTCHA_SITE_KEY ??
