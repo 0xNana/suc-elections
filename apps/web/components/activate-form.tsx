@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { activateStudentAccount, BackendError } from "../lib/api";
-import { getSupabaseBrowserClient } from "../lib/supabase-browser";
 import { SiteFrame } from "./site-frame";
 
 function getRoleDestination(role?: string) {
@@ -57,6 +56,7 @@ export function ActivateForm() {
 
     try {
       const session = await activateStudentAccount(studentId, activationCode, newPassword);
+      const { getSupabaseBrowserClient } = await import("../lib/supabase-browser");
       const supabase = getSupabaseBrowserClient();
       const { error: sessionError } = await supabase.auth.setSession({
         access_token: session.access_token,

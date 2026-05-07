@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 import type { ResultsResponse } from "@suc-vote/shared";
 
 import { BackendError, getResults } from "../lib/api";
-import { getSupabaseBrowserClient } from "../lib/supabase-browser";
 import { SiteFrame } from "./site-frame";
 
 interface ElectionWindow {
@@ -45,31 +44,47 @@ export function ResultsClient() {
   }
 
   useEffect(() => {
-    const supabase = getSupabaseBrowserClient();
-
-    supabase
-      .from("election_config")
-      .select("poll_closes")
-      .order("poll_closes", { ascending: false })
-      .limit(1)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) {
-          setCloseWindow(data);
-        }
-      });
+    let active = true;
+    let removeResultsChannel: (() => void) | null = null;
 
     void loadResults();
 
-    const channel = supabase
-      .channel("results")
-      .on("broadcast", { event: "results.refresh" }, () => {
-        void loadResults();
-      })
-      .subscribe();
+    async function subscribeToResults() {
+      const { getSupabaseBrowserClient } = await import("../lib/supabase-browser");
+      const supabase = getSupabaseBrowserClient();
+
+      const { data } = await supabase
+        .from("election_config")
+        .select("poll_closes")
+        .order("poll_closes", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (active && data) {
+        setCloseWindow(data);
+      }
+
+      if (!active) {
+        return;
+      }
+
+      const channel = supabase
+        .channel("results")
+        .on("broadcast", { event: "results.refresh" }, () => {
+          void loadResults();
+        })
+        .subscribe();
+
+      removeResultsChannel = () => {
+        void supabase.removeChannel(channel);
+      };
+    }
+
+    void subscribeToResults();
 
     return () => {
-      void supabase.removeChannel(channel);
+      active = false;
+      removeResultsChannel?.();
     };
   }, []);
 
