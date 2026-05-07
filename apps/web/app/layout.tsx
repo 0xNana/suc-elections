@@ -1,16 +1,19 @@
 import type { Metadata } from "next";
 import { Inter, Playfair_Display } from "next/font/google";
 
+import { AmbientVideoStage } from "../components/ambient-video-stage";
 import "./globals.css";
 
 const inter = Inter({
   subsets: ["latin"],
-  variable: "--font-body"
+  variable: "--font-body",
+  display: "swap"
 });
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
-  variable: "--font-heading"
+  variable: "--font-heading",
+  display: "swap"
 });
 
 export const metadata: Metadata = {
@@ -29,20 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <a href="#main-content" className="skip-link">
           Skip to main content
         </a>
-        <div className="video-stage" aria-hidden="true">
-          <video
-            className="video-stage__media"
-            autoPlay
-            loop
-            muted
-            playsInline
-            preload="metadata"
-          >
-            <source src="https://www.southshore.edu.gh/videos/hero.mp4" type="video/mp4" />
-          </video>
-          <div className="video-stage__overlay" />
-          <div className="video-stage__glow" />
-        </div>
+        <AmbientVideoStage />
         <div className="app-shell">{children}</div>
       </body>
     </html>

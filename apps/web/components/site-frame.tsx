@@ -29,6 +29,10 @@ export function SiteFrame({
                 <img
                   src="https://www.southshore.edu.gh/assets/images/suc-logo.png"
                   alt="Southshore University College"
+                  width={220}
+                  height={64}
+                  decoding="async"
+                  fetchPriority="high"
                   className="h-10 w-auto sm:h-11"
                 />
               </picture>

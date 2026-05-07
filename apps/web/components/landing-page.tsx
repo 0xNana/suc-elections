@@ -23,7 +23,7 @@ function formatDistance(target: string, now: number) {
   return `${days}d ${hours}h ${minutes}m ${seconds}s`;
 }
 
-export function LandingPage() {
+function ElectionCountdownBadge() {
   const [windowState, setWindowState] = useState<ElectionWindow | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -66,19 +66,23 @@ export function LandingPage() {
         : "Polls close in";
 
   return (
+    <div className="min-w-[13rem] rounded-[16px] border border-[#c7a25c]/35 bg-[rgba(5,14,24,0.9)] px-4 py-1.5 text-right shadow-[0_10px_24px_rgba(0,0,0,0.18)] sm:min-w-[16rem]">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#d6b067]">
+          {countdownLabel}
+        </p>
+        <p className="text-base font-semibold text-[#f8f2e9] sm:text-xl">{countdownValue}</p>
+      </div>
+    </div>
+  );
+}
+
+export function LandingPage() {
+  return (
     <SiteFrame
       eyebrow="SRC Elections"
       title="SRC Electronic Voting System"
-      actions={
-        <div className="min-w-[13rem] rounded-[16px] border border-[#c7a25c]/35 bg-[rgba(5,14,24,0.9)] px-4 py-1.5 text-right shadow-[0_10px_24px_rgba(0,0,0,0.18)] sm:min-w-[16rem]">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#d6b067]">
-              {countdownLabel}
-            </p>
-            <p className="text-base font-semibold text-[#f8f2e9] sm:text-xl">{countdownValue}</p>
-          </div>
-        </div>
-      }
+      actions={<ElectionCountdownBadge />}
     >
       <section className="mx-auto flex w-full flex-1 items-center justify-center py-10 lg:py-16">
         <div className="section-panel w-full max-w-xl space-y-3 shadow-[0_24px_80px_rgba(0,0,0,0.18)]">

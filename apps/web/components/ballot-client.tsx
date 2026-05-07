@@ -22,11 +22,13 @@ function getInitials(fullName: string) {
 function CandidateAvatar({
   fullName,
   photoUrl,
-  large = false
+  large = false,
+  eager = false
 }: {
   fullName: string;
   photoUrl: string | null;
   large?: boolean;
+  eager?: boolean;
 }) {
   const sizeClass = large ? "h-24 w-24 sm:h-28 sm:w-28" : "h-16 w-16";
   const iconClass = large ? "h-14 w-14" : "h-10 w-10";
@@ -37,6 +39,11 @@ function CandidateAvatar({
       <img
         src={photoUrl}
         alt={fullName}
+        width={large ? 112 : 64}
+        height={large ? 112 : 64}
+        decoding="async"
+        loading={eager ? "eager" : "lazy"}
+        fetchPriority={eager ? "high" : "auto"}
         className={`${sizeClass} shrink-0 rounded-full border-2 border-gold/30 object-cover bg-navy/5`}
       />
     );
@@ -330,7 +337,7 @@ export function BallotClient() {
               </div>
 
               <div className="grid gap-4" role="list" aria-label={`Candidates for ${currentPosition.title}`}>
-                {currentPosition.candidates.map((candidate) => {
+                {currentPosition.candidates.map((candidate, index) => {
                   const active = selectedCandidateId === candidate.id;
 
                   return (
@@ -355,6 +362,7 @@ export function BallotClient() {
                             fullName={candidate.full_name}
                             photoUrl={candidate.photo_url}
                             large
+                            eager={index < 2}
                           />
                           <div className="min-w-0">
                             <div className="inline-flex items-center rounded-full border border-gold/30 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-gold">
