@@ -10,6 +10,11 @@ html {
   scroll-behavior: smooth;
 }
 
+html,
+body {
+  min-width: 320px;
+}
+
 body {
   background:
     radial-gradient(circle at top left, rgba(184, 145, 58, 0.12), transparent 30%),
@@ -25,6 +30,7 @@ h4 {
 }
 
 .app-shell {
+  min-width: 0;
   position: relative;
   z-index: 1;
 }
@@ -107,34 +113,34 @@ h4 {
 
 @layer components {
   .page-shell {
-    @apply mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pb-8 pt-0 sm:px-6 lg:px-8;
+    @apply mx-auto flex w-full min-w-0 max-w-6xl flex-1 flex-col px-3 pb-6 pt-0 sm:px-6 sm:pb-8 lg:px-8;
   }
 
   .page-shell-wide {
-    @apply mx-auto flex w-full max-w-[1440px] flex-1 flex-col px-4 pb-8 pt-0 sm:px-6 lg:px-8;
+    @apply mx-auto flex w-full min-w-0 max-w-[1440px] flex-1 flex-col px-3 pb-6 pt-0 sm:px-6 sm:pb-8 lg:px-8;
   }
 
   .panel {
-    @apply rounded-[28px] border border-[#d8c7a5]/70 bg-[rgba(248,244,236,0.97)] shadow-panel backdrop-blur-md;
+    @apply rounded-[20px] border border-[#d8c7a5]/70 bg-[rgba(248,244,236,0.97)] shadow-panel backdrop-blur-md sm:rounded-[28px];
   }
 
   .section-panel {
-    @apply panel p-6 sm:p-8;
+    @apply panel min-w-0 p-4 sm:p-6 lg:p-8;
   }
 
   .eyebrow {
-    @apply text-xs font-semibold uppercase tracking-[0.32em] text-gold;
+    @apply text-xs font-semibold uppercase tracking-[0.18em] text-gold sm:tracking-[0.32em];
   }
 
   .input-field {
-    @apply w-full rounded-2xl border border-navy/10 bg-white px-4 py-3 text-base text-ink outline-none transition focus:border-gold focus:ring-2 focus:ring-gold/20;
+    @apply w-full min-w-0 max-w-full rounded-2xl border border-navy/10 bg-white px-4 py-3 text-base text-ink outline-none transition focus:border-gold focus:ring-2 focus:ring-gold/20;
   }
 
   .button-primary {
-    @apply inline-flex items-center justify-center rounded-full bg-[#b8913a] px-5 py-3 text-sm font-semibold text-[#0d1d30] transition hover:bg-[#c8a14a] disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex w-full max-w-full items-center justify-center whitespace-normal rounded-full bg-[#b8913a] px-5 py-3 text-center text-sm font-semibold text-[#0d1d30] transition hover:bg-[#c8a14a] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto;
   }
 
   .button-secondary {
-    @apply inline-flex items-center justify-center rounded-full border border-[#d4c1a0] bg-white px-5 py-3 text-sm font-semibold text-navy transition hover:border-gold hover:text-gold disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex w-full max-w-full items-center justify-center whitespace-normal rounded-full border border-[#d4c1a0] bg-white px-5 py-3 text-center text-sm font-semibold text-navy transition hover:border-gold hover:text-gold disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto;
   }
 }

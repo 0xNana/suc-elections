@@ -325,7 +325,7 @@ function StatusBadge({ liveStatus }: { liveStatus: LiveStatus }) {
     liveStatus === "live" ? "Live updates on" : liveStatus === "connecting" ? "Connecting" : "Live updates off";
 
   return (
-    <span className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] ${tone}`}>
+    <span className={`inline-flex max-w-full items-center rounded-full border px-3 py-1 text-center text-xs font-semibold uppercase leading-4 tracking-[0.14em] sm:tracking-[0.22em] ${tone}`}>
       {label}
     </span>
   );
@@ -344,8 +344,8 @@ function StatCard({
 }) {
   return (
     <div className={`border border-navy/10 bg-white ${compact ? "rounded-[20px] px-4 py-4" : "rounded-[24px] px-5 py-5"}`}>
-      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-gold">{label}</p>
-      <p className={`font-semibold text-navy ${compact ? "mt-2 text-3xl" : "mt-3 text-4xl"}`}>{value}</p>
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gold sm:tracking-[0.24em]">{label}</p>
+      <p className={`break-words font-semibold text-navy ${compact ? "mt-2 text-2xl sm:text-3xl" : "mt-3 text-3xl sm:text-4xl"}`}>{value}</p>
       <p className={`text-stone ${compact ? "mt-1 text-sm leading-5" : "mt-2 text-sm leading-6"}`}>{note}</p>
     </div>
   );
@@ -361,10 +361,10 @@ function PositionCard({
   const leaderVotes = rows[0]?.vote_count ?? 0;
 
   return (
-    <div className="rounded-[26px] border border-navy/10 bg-white px-5 py-5">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h3 className="text-xl font-semibold text-navy">{title}</h3>
-        <span className="text-xs font-semibold uppercase tracking-[0.22em] text-gold">
+    <div className="rounded-[22px] border border-navy/10 bg-white px-4 py-4 sm:rounded-[26px] sm:px-5 sm:py-5">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+        <h3 className="break-words text-xl font-semibold text-navy">{title}</h3>
+        <span className="text-xs font-semibold uppercase tracking-[0.16em] text-gold sm:tracking-[0.22em]">
           {rows.length} candidates
         </span>
       </div>
@@ -374,14 +374,14 @@ function PositionCard({
 
           return (
             <div key={row.candidate_id} className="space-y-2">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-base font-semibold text-navy">{row.candidate}</p>
+              <div className="flex items-start justify-between gap-3 sm:gap-4">
+                <div className="min-w-0">
+                  <p className="break-words text-base font-semibold text-navy">{row.candidate}</p>
                   <p className="text-sm text-stone">Ballot #{row.ballot_num}</p>
                 </div>
-                <div className="text-right">
+                <div className="shrink-0 text-right">
                   <p className="text-2xl font-semibold text-navy">{formatNumber(row.vote_count)}</p>
-                  <p className="text-xs uppercase tracking-[0.22em] text-stone">
+                  <p className="text-xs uppercase tracking-[0.16em] text-stone sm:tracking-[0.22em]">
                     {index === 0 ? "Leading" : "Running"}
                   </p>
                 </div>
@@ -1266,7 +1266,7 @@ export function AdminDashboardClient() {
             <div className="section-panel space-y-5">
               <div className="space-y-2">
                 <p className="eyebrow">Issue Codes</p>
-                <h2 className="text-3xl font-semibold text-navy">Generate activation codes</h2>
+                <h2 className="break-words text-2xl font-semibold text-navy sm:text-3xl">Generate activation codes</h2>
                 <p className="text-sm leading-7 text-stone">
                   Paste a CSV with <code>Student ID</code> and <code>Full Name</code>. The controls at the right apply
                   <code> Role</code> and voting access to every row.
@@ -1330,8 +1330,8 @@ export function AdminDashboardClient() {
                       Download CSV
                     </button>
                   </div>
-                  <div className="overflow-hidden rounded-[24px] border border-navy/10">
-                    <table className="min-w-full divide-y divide-navy/10 text-left text-sm">
+                  <div className="max-w-full overflow-x-auto rounded-[20px] border border-navy/10 sm:rounded-[24px]">
+                    <table className="min-w-[48rem] divide-y divide-navy/10 text-left text-sm">
                       <thead className="bg-navy text-cream">
                         <tr>
                           <th className="px-4 py-3 font-medium">Student ID</th>
@@ -1376,7 +1376,7 @@ export function AdminDashboardClient() {
               <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                 <div className="space-y-2">
                   <p className="eyebrow">Manage Users</p>
-                  <h2 className="text-3xl font-semibold text-navy">Students and roles</h2>
+                  <h2 className="break-words text-2xl font-semibold text-navy sm:text-3xl">Students and roles</h2>
                 </div>
                 <div className="flex flex-col gap-3 sm:flex-row">
                   <input
@@ -1410,8 +1410,8 @@ export function AdminDashboardClient() {
                 </div>
               </div>
 
-              <div className="overflow-hidden rounded-[24px] border border-navy/10">
-                <table className="min-w-full divide-y divide-navy/10 text-left text-sm">
+              <div className="max-w-full overflow-x-auto rounded-[20px] border border-navy/10 sm:rounded-[24px]">
+                <table className="min-w-[64rem] divide-y divide-navy/10 text-left text-sm">
                   <thead className="bg-navy text-cream">
                     <tr>
                       <th className="px-4 py-3 font-medium">Student ID</th>
@@ -1500,7 +1500,7 @@ export function AdminDashboardClient() {
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                     <div>
                       <p className="eyebrow">Overview</p>
-                      <h2 className="text-3xl font-semibold text-navy">Election control</h2>
+                      <h2 className="break-words text-2xl font-semibold text-navy sm:text-3xl">Election control</h2>
                     </div>
                     <StatusBadge liveStatus={liveStatus} />
                   </div>
@@ -1543,7 +1543,7 @@ export function AdminDashboardClient() {
                 <div className="section-panel space-y-5">
                   <div className="space-y-2">
                     <p className="eyebrow">Actions</p>
-                    <h2 className="text-3xl font-semibold text-navy">Quick control</h2>
+                    <h2 className="break-words text-2xl font-semibold text-navy sm:text-3xl">Quick control</h2>
                   </div>
                   <div className="rounded-[22px] border border-navy/10 bg-cream/70 px-4 py-4">
                     <div className="space-y-4">
@@ -1634,7 +1634,7 @@ export function AdminDashboardClient() {
               <div className="section-panel space-y-5">
                 <div className="space-y-2">
                   <p className="eyebrow">Schedule</p>
-                  <h2 className="text-3xl font-semibold text-navy">Set poll times</h2>
+                  <h2 className="break-words text-2xl font-semibold text-navy sm:text-3xl">Set poll times</h2>
                   <p className="text-sm leading-7 text-stone">
                     Saving this form creates the election if none exists yet.
                   </p>
@@ -1683,7 +1683,7 @@ export function AdminDashboardClient() {
               <div className="section-panel space-y-5">
                 <div className="space-y-2">
                   <p className="eyebrow">Count</p>
-                  <h2 className="text-3xl font-semibold text-navy">Votes by position</h2>
+                  <h2 className="break-words text-2xl font-semibold text-navy sm:text-3xl">Votes by position</h2>
                 </div>
                 {results ? (
                   <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
@@ -1786,8 +1786,8 @@ export function AdminDashboardClient() {
                       Export CSV
                     </button>
                   </div>
-                  <div className="overflow-hidden rounded-[24px] border border-navy/10">
-                    <table className="min-w-full divide-y divide-navy/10 text-left text-sm">
+                  <div className="max-w-full overflow-x-auto rounded-[20px] border border-navy/10 sm:rounded-[24px]">
+                    <table className="min-w-[44rem] divide-y divide-navy/10 text-left text-sm">
                       <thead className="bg-navy text-cream">
                         <tr>
                           <th className="px-4 py-3 font-medium">Action</th>

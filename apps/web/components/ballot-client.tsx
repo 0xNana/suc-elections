@@ -30,9 +30,9 @@ function CandidateAvatar({
   large?: boolean;
   eager?: boolean;
 }) {
-  const sizeClass = large ? "h-24 w-24 sm:h-28 sm:w-28" : "h-16 w-16";
-  const iconClass = large ? "h-14 w-14" : "h-10 w-10";
-  const textClass = large ? "text-2xl" : "text-lg";
+  const sizeClass = large ? "h-20 w-20 sm:h-28 sm:w-28" : "h-16 w-16";
+  const iconClass = large ? "h-12 w-12 sm:h-14 sm:w-14" : "h-10 w-10";
+  const textClass = large ? "text-xl sm:text-2xl" : "text-lg";
 
   if (photoUrl) {
     return (
@@ -195,7 +195,7 @@ export function BallotClient() {
         <aside className="section-panel space-y-6">
           <div className="space-y-2">
             <p className="eyebrow">Ballot paper</p>
-            <h2 className="text-3xl font-semibold text-navy" aria-live="polite">
+            <h2 className="text-2xl font-semibold text-navy sm:text-3xl" aria-live="polite">
               {completed} of {total} offices completed
             </h2>
             <p className="text-sm leading-7 text-stone">
@@ -227,7 +227,7 @@ export function BallotClient() {
                             : "border-navy/10 bg-cream/80 text-stone hover:border-gold/40 hover:bg-white"
                       }`}
                     >
-                      <div className="flex items-start gap-4">
+                      <div className="flex items-start gap-3 sm:gap-4">
                         <span
                           className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-sm font-semibold ${
                             position.has_voted
@@ -240,10 +240,10 @@ export function BallotClient() {
                           {String(index + 1).padStart(2, "0")}
                         </span>
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-4">
-                            <h3 className="text-lg font-semibold text-navy">{position.title}</h3>
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                            <h3 className="break-words text-lg font-semibold text-navy">{position.title}</h3>
                             <span
-                              className={`text-xs font-semibold uppercase tracking-[0.22em] ${
+                              className={`text-xs font-semibold uppercase tracking-[0.16em] sm:tracking-[0.22em] ${
                                 position.has_voted ? "text-gold" : selected ? "text-navy" : "text-stone"
                               }`}
                             >
@@ -308,11 +308,11 @@ export function BallotClient() {
             </div>
           ) : (
             <div className="space-y-6">
-              <div className="rounded-[26px] border border-navy/10 bg-cream/75 px-6 py-6">
+              <div className="rounded-[22px] border border-navy/10 bg-cream/75 px-4 py-4 sm:rounded-[26px] sm:px-6 sm:py-6">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="space-y-2">
                     <p className="eyebrow">Selected office</p>
-                    <h2 ref={currentOfficeRef} tabIndex={-1} className="text-4xl font-semibold text-navy">
+                    <h2 ref={currentOfficeRef} tabIndex={-1} className="break-words text-3xl font-semibold text-navy sm:text-4xl">
                       {currentPosition.title}
                     </h2>
                     <p className="text-sm leading-7 text-stone">
@@ -350,14 +350,14 @@ export function BallotClient() {
                       }}
                       aria-pressed={active}
                       aria-describedby={error ? errorId : undefined}
-                      className={`rounded-[28px] border px-6 py-6 text-left transition ${
+                      className={`rounded-[22px] border px-4 py-4 text-left transition sm:rounded-[28px] sm:px-6 sm:py-6 ${
                         active
                           ? "border-gold bg-[#f8e8bd] shadow-[0_18px_36px_rgba(184,145,58,0.18)]"
                           : "border-navy/10 bg-white hover:border-gold/40 hover:bg-cream/50"
                       }`}
                     >
                       <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-center gap-5">
+                        <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:gap-5">
                           <CandidateAvatar
                             fullName={candidate.full_name}
                             photoUrl={candidate.photo_url}
@@ -365,10 +365,10 @@ export function BallotClient() {
                             eager={index < 2}
                           />
                           <div className="min-w-0">
-                            <div className="inline-flex items-center rounded-full border border-gold/30 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-gold">
+                            <div className="inline-flex max-w-full items-center rounded-full border border-gold/30 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-gold sm:tracking-[0.24em]">
                               Ballot #{candidate.ballot_num}
                             </div>
-                            <h3 className="mt-3 text-3xl font-semibold text-navy">{candidate.full_name}</h3>
+                            <h3 className="mt-3 break-words text-2xl font-semibold text-navy sm:text-3xl">{candidate.full_name}</h3>
                             <p className="mt-2 text-sm leading-6 text-stone">
                               {active
                                 ? "Selected for this office."
@@ -394,7 +394,7 @@ export function BallotClient() {
                 })}
               </div>
 
-              <div className="sticky bottom-4 z-10 rounded-[26px] border border-gold/25 bg-[rgba(248,244,236,0.98)] px-5 py-5 shadow-[0_20px_40px_rgba(13,29,48,0.12)] backdrop-blur-sm">
+              <div className="sticky bottom-3 z-10 rounded-[22px] border border-gold/25 bg-[rgba(248,244,236,0.98)] px-4 py-4 shadow-[0_20px_40px_rgba(13,29,48,0.12)] backdrop-blur-sm sm:bottom-4 sm:rounded-[26px] sm:px-5 sm:py-5">
                 {selectedCandidate ? (
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="space-y-1">

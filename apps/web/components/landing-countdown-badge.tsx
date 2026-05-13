@@ -71,12 +71,12 @@ export function LandingCountdownBadge() {
         : "Polls close in";
 
   return (
-    <div className="min-w-[13rem] rounded-[16px] border border-[#c7a25c]/35 bg-[rgba(5,14,24,0.9)] px-4 py-1.5 text-right shadow-[0_10px_24px_rgba(0,0,0,0.18)] sm:min-w-[16rem]">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#d6b067]">
+    <div className="w-full min-w-0 max-w-[13rem] rounded-[16px] border border-[#c7a25c]/35 bg-[rgba(5,14,24,0.9)] px-3 py-1.5 text-right shadow-[0_10px_24px_rgba(0,0,0,0.18)] sm:max-w-none sm:min-w-[16rem] sm:px-4">
+      <div className="flex min-w-0 items-center justify-between gap-2 sm:gap-3">
+        <p className="min-w-0 text-left text-[10px] font-semibold uppercase leading-4 tracking-[0.12em] text-[#d6b067] sm:tracking-[0.18em]">
           {countdownLabel}
         </p>
-        <p className="text-base font-semibold text-[#f8f2e9] sm:text-xl">{countdownValue}</p>
+        <p className="shrink-0 text-sm font-semibold text-[#f8f2e9] sm:text-xl">{countdownValue}</p>
       </div>
     </div>
   );

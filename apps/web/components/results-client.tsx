@@ -107,7 +107,7 @@ export function ResultsClient() {
         {sealedMessage ? (
           <div className="section-panel space-y-3">
             <p className="eyebrow">Results status</p>
-            <h2 className="text-3xl font-semibold text-navy">{sealedMessage}</h2>
+            <h2 className="break-words text-2xl font-semibold text-navy sm:text-3xl">{sealedMessage}</h2>
             <p className="text-sm leading-7 text-stone">
               {closeWindow
                 ? `Polls close at ${new Date(closeWindow.poll_closes).toLocaleString()}. Results stay hidden until the EC releases them.`
@@ -119,10 +119,10 @@ export function ResultsClient() {
         {!sealedMessage && response ? (
           [...grouped.entries()].map(([position, rows]) => (
             <div key={position} className="section-panel">
-              <div className="mb-5 flex items-end justify-between gap-4">
-                <div>
+              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+                <div className="min-w-0">
                   <p className="eyebrow">Position</p>
-                  <h2 className="text-3xl font-semibold text-navy">{position}</h2>
+                  <h2 className="break-words text-2xl font-semibold text-navy sm:text-3xl">{position}</h2>
                 </div>
                 <p className="text-sm text-stone">
                   Refreshed {new Date(response.refreshed_at).toLocaleTimeString()}
@@ -132,14 +132,14 @@ export function ResultsClient() {
                 {rows.map((row) => (
                   <div
                     key={row.candidate_id}
-                    className="rounded-[24px] border border-navy/10 bg-cream/70 px-5 py-5"
+                    className="rounded-[20px] border border-navy/10 bg-cream/70 px-4 py-4 sm:rounded-[24px] sm:px-5 sm:py-5"
                   >
-                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-gold">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gold sm:tracking-[0.28em]">
                       Ballot #{row.ballot_num}
                     </p>
-                    <h3 className="mt-2 text-2xl font-semibold text-navy">{row.candidate}</h3>
+                    <h3 className="mt-2 break-words text-xl font-semibold text-navy sm:text-2xl">{row.candidate}</h3>
                     <p className="mt-4 text-sm text-stone">Recorded votes</p>
-                    <p className="text-3xl font-semibold text-navy">{row.vote_count}</p>
+                    <p className="text-2xl font-semibold text-navy sm:text-3xl">{row.vote_count}</p>
                   </div>
                 ))}
               </div>

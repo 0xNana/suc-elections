@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Playfair_Display } from "next/font/google";
 
 import { AmbientVideoStage } from "../components/ambient-video-stage";
@@ -23,6 +23,11 @@ export const metadata: Metadata = {
     icon: "https://www.southshore.edu.gh/favicon-32x32.png",
     shortcut: "https://www.southshore.edu.gh/favicon-32x32.png"
   }
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

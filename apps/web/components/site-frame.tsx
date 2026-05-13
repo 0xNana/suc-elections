@@ -17,8 +17,8 @@ export function SiteFrame({
 }) {
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="fixed top-0 right-0 left-0 z-50 w-full border-b border-[#d8c7a5]/80 bg-[rgba(248,244,236,0.95)] shadow-[0_10px_28px_rgba(0,0,0,0.08)] backdrop-blur-sm">
-        <div className="mx-auto grid w-full max-w-[1440px] grid-cols-[1fr_auto] gap-3 px-4 py-3 lg:grid-cols-[1fr_auto_1fr] lg:items-center sm:px-6 lg:px-8">
+      <header className="sticky top-0 z-50 w-full border-b border-[#d8c7a5]/80 bg-[rgba(248,244,236,0.95)] shadow-[0_10px_28px_rgba(0,0,0,0.08)] backdrop-blur-sm">
+        <div className="mx-auto grid w-full max-w-[1440px] grid-cols-[auto_minmax(0,1fr)] items-center gap-3 px-3 py-3 sm:px-6 lg:grid-cols-[1fr_auto_1fr] lg:px-8">
           <div className="flex min-w-0 items-center gap-2 lg:justify-self-start">
             <Link href="/" className="inline-flex shrink-0 items-center" aria-label="Southshore University College home">
               <picture>
@@ -33,14 +33,14 @@ export function SiteFrame({
                   height={64}
                   decoding="async"
                   fetchPriority="high"
-                  className="h-10 w-auto sm:h-11"
+                  className="h-9 w-auto max-w-[8rem] object-contain sm:h-11 sm:max-w-none"
                 />
               </picture>
             </Link>
           </div>
-          {actions ? <div className="flex shrink-0 justify-self-end lg:order-3 lg:justify-self-end lg:justify-end">{actions}</div> : <div className="justify-self-end lg:order-3" />}
+          {actions ? <div className="flex min-w-0 justify-self-end lg:order-3 lg:justify-self-end lg:justify-end">{actions}</div> : <div className="justify-self-end lg:order-3" />}
           <div className="col-span-2 min-w-0 text-left lg:order-2 lg:col-span-1 lg:text-center">
-            <h1 className="min-w-0 text-lg font-semibold leading-tight text-navy sm:text-2xl">
+            <h1 className="min-w-0 break-words text-lg font-semibold leading-tight text-navy sm:text-2xl">
               {title}
             </h1>
             {lead ? (
@@ -50,7 +50,7 @@ export function SiteFrame({
         </div>
       </header>
       <main id="main-content" className="flex flex-1 flex-col">
-        <div className={`${fullWidth ? "page-shell-wide" : "page-shell"} pt-36 sm:pt-32 lg:pt-24`}>{children}</div>
+        <div className={`${fullWidth ? "page-shell-wide" : "page-shell"} pt-5 sm:pt-8 lg:pt-10`}>{children}</div>
       </main>
       <footer className="w-full border-t border-[#10253c]/15 bg-[#10253c] text-[#f8f2e9]">
         <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-6 px-4 py-10 text-base sm:px-6 sm:py-12 lg:flex-row lg:items-center lg:justify-between lg:px-8 lg:py-14">
@@ -60,9 +60,9 @@ export function SiteFrame({
             </p>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[#e6dccb]">
               <span>Built by Mr. Ace</span>
-              <span className="text-[#a8c0d9]">·</span>
+              <span className="hidden text-[#a8c0d9] sm:inline">·</span>
               <span>Open source under MIT</span>
-              <span className="text-[#a8c0d9]">·</span>
+              <span className="hidden text-[#a8c0d9] sm:inline">·</span>
               <a
                 href="https://github.com/0xNana/suc-elections"
                 target="_blank"
